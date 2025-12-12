@@ -4,9 +4,11 @@ import { FaCalendar, FaMapMarkerAlt, FaUsers, FaCheckCircle, FaClock, FaMoneyBil
 import AppNavbar from '../components/AppNavbar';
 import Footer from '../components/Footer';
 import { auth } from '../firebase';
+import { useApp } from '../context/AppContext';
 
 const MyBookingsPage = () => {
     const user = auth.currentUser;
+    const { formatPrice } = useApp(); // Get formatPrice for currency conversion
     const [bookings, setBookings] = useState([]);
 
     useEffect(() => {
@@ -101,7 +103,7 @@ const MyBookingsPage = () => {
                                                     <small className="text-muted d-block">Total Paid</small>
                                                     <strong className="d-block text-success">
                                                         <FaMoneyBill className="me-1" />
-                                                        LKR {booking.totalAmount.toLocaleString()}
+                                                        {formatPrice(booking.totalAmount)}
                                                     </strong>
                                                 </Col>
                                             </Row>

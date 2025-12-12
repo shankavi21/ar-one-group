@@ -20,7 +20,7 @@ const Footer = () => {
                             <li className="mb-2"><a href="/home" className="text-decoration-none text-secondary">Home</a></li>
                             <li className="mb-2"><a href="/packages" className="text-decoration-none text-secondary">Packages</a></li>
                             <li className="mb-2"><a href="/guides" className="text-decoration-none text-secondary">Guides</a></li>
-                            <li className="mb-2"><a href="/about" className="text-decoration-none text-secondary">About Us</a></li>
+                            <li className="mb-2"><a href="/contact" className="text-decoration-none text-secondary">Contact</a></li>
                         </ul>
                     </Col>
                     <Col md={3} className="mb-4">

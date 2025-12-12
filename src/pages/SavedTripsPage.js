@@ -4,9 +4,11 @@ import { FaHeart, FaStar, FaMapMarkerAlt, FaArrowLeft, FaSadTear } from 'react-i
 import AppNavbar from '../components/AppNavbar';
 import Footer from '../components/Footer';
 import { auth } from '../firebase';
+import { useApp } from '../context/AppContext';
 
 const SavedTripsPage = () => {
     const user = auth.currentUser;
+    const { formatPrice } = useApp(); // Get formatPrice for currency conversion
     const [savedPackageIds, setSavedPackageIds] = useState([]);
 
     useEffect(() => {
@@ -32,15 +34,16 @@ const SavedTripsPage = () => {
     };
 
     // Comprehensive list of all packages available in the app to match IDs
+    // Prices stored as numbers in LKR for proper conversion
     const allPackages = [
-        { id: 1, title: 'Sigiriya Adventure', location: 'Sigiriya, Sri Lanka', price: 'LKR 45,000', duration: '3 Days', image: '/sigiriya.png', rating: 4.8 },
-        { id: 2, title: 'Ella Hill Climb', location: 'Ella, Sri Lanka', price: 'LKR 35,000', duration: '2 Days', image: '/ella.png', rating: 4.9 },
-        { id: 3, title: 'Coastal Bliss', location: 'Mirissa, Sri Lanka', price: 'LKR 60,000', duration: '4 Days', image: '/beach.png', rating: 4.7 },
-        { id: 4, title: 'Cultural Triangle', location: 'Kandy, Sri Lanka', price: 'LKR 55,000', duration: '3 Days', image: '/kandy.jpg', rating: 4.6 },
-        { id: 5, title: 'Wild Yala Safari', location: 'Yala, Sri Lanka', price: 'LKR 40,000', duration: '2 Days', image: '/yala.jpg', rating: 4.8 },
-        { id: 6, title: 'Historic Galle Fort', location: 'Galle, Sri Lanka', price: 'LKR 30,000', duration: '1 Day', image: '/galle.jpg', rating: 4.9 },
-        { id: 7, title: 'Knuckles Trek', location: 'Matale, Sri Lanka', price: 'LKR 50,000', duration: '3 Days', image: '/knuckles.jpg', rating: 4.7 },
-        { id: 8, title: 'Jaffna Discovery', location: 'Jaffna, Sri Lanka', price: 'LKR 65,000', duration: '4 Days', image: '/jaffna.jpg', rating: 4.5 },
+        { id: 1, title: 'Sigiriya Adventure', location: 'Sigiriya, Sri Lanka', price: 45000, duration: '3 Days', image: '/sigiriya.png', rating: 4.8 },
+        { id: 2, title: 'Ella Hill Climb', location: 'Ella, Sri Lanka', price: 35000, duration: '2 Days', image: '/ella.png', rating: 4.9 },
+        { id: 3, title: 'Coastal Bliss', location: 'Mirissa, Sri Lanka', price: 60000, duration: '4 Days', image: '/beach.png', rating: 4.7 },
+        { id: 4, title: 'Cultural Triangle', location: 'Kandy, Sri Lanka', price: 55000, duration: '3 Days', image: '/kandy.jpg', rating: 4.6 },
+        { id: 5, title: 'Wild Yala Safari', location: 'Yala, Sri Lanka', price: 40000, duration: '2 Days', image: '/yala.jpg', rating: 4.8 },
+        { id: 6, title: 'Historic Galle Fort', location: 'Galle, Sri Lanka', price: 30000, duration: '1 Day', image: '/galle.jpg', rating: 4.9 },
+        { id: 7, title: 'Knuckles Trek', location: 'Matale, Sri Lanka', price: 50000, duration: '3 Days', image: '/knuckles.jpg', rating: 4.7 },
+        { id: 8, title: 'Jaffna Discovery', location: 'Jaffna, Sri Lanka', price: 65000, duration: '4 Days', image: '/jaffna.jpg', rating: 4.5 },
     ];
 
     const savedPackages = allPackages.filter(pkg => savedPackageIds.includes(pkg.id));
@@ -92,7 +95,7 @@ const SavedTripsPage = () => {
                                         <FaMapMarkerAlt className="me-1 text-primary-custom" /> {pkg.location}
                                     </div>
                                     <div className="d-flex justify-content-between align-items-center mt-auto">
-                                        <div className="text-dark fw-bold">{pkg.price}</div>
+                                        <div className="text-dark fw-bold">{formatPrice(pkg.price)}</div>
                                         <Button variant="outline-primary" size="sm" className="rounded-pill px-3 border-primary-custom text-primary-custom">View Details</Button>
                                     </div>
                                 </Card.Body>

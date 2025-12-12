@@ -11,7 +11,7 @@ import { useApp } from '../context/AppContext';
 const ProfilePage = () => {
     const navigate = useNavigate();
     const user = auth.currentUser;
-    const { currency, language, notifications, updateCurrency, updateLanguage, updateNotifications } = useApp();
+    const { currency, language, notifications, updateCurrency, updateLanguage, updateNotifications, formatPrice } = useApp();
 
     const [activeTab, setActiveTab] = useState('profile');
     const [editing, setEditing] = useState(false);
@@ -152,14 +152,25 @@ const ProfilePage = () => {
     };
 
     const handleSettingsSave = () => {
+        // Save notification settings to localStorage
         localStorage.setItem('emailNotifications', settings.emailNotifications);
         localStorage.setItem('smsNotifications', settings.smsNotifications);
         localStorage.setItem('newsletterSubscription', settings.newsletterSubscription);
         localStorage.setItem('bookingReminders', settings.bookingReminders);
-        localStorage.setItem('currency', settings.currency);
-        localStorage.setItem('language', settings.language);
 
-        showMessage('success', 'Settings saved successfully!');
+        // Update global context for currency and language (this triggers re-renders app-wide)
+        updateCurrency(settings.currency);
+        updateLanguage(settings.language);
+
+        // Update notifications in context
+        updateNotifications({
+            emailNotifications: settings.emailNotifications,
+            smsNotifications: settings.smsNotifications,
+            newsletterSubscription: settings.newsletterSubscription,
+            bookingReminders: settings.bookingReminders
+        });
+
+        showMessage('success', 'Settings saved successfully! Currency and language changes are now active.');
     };
 
     const handleImageUpload = (e) => {
@@ -444,7 +455,7 @@ const ProfilePage = () => {
                                                                         </div>
                                                                         <div className="text-end">
                                                                             <Badge bg="success" className="mb-2">{booking.status}</Badge>
-                                                                            <h5 className="fw-bold mb-0" style={{ color: '#0891b2' }}>LKR {booking.totalAmount.toLocaleString()}</h5>
+                                                                            <h5 className="fw-bold mb-0" style={{ color: '#0891b2' }}>{formatPrice(booking.totalAmount)}</h5>
                                                                         </div>
                                                                     </div>
                                                                 </Col>

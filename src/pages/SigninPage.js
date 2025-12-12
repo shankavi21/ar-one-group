@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import AuthLayout from '../components/AuthLayout';
 import { auth, googleProvider } from '../firebase';
 import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
+import { isAdminUser } from '../utils/adminConfig';
 
 const SigninPage = () => {
     const navigate = useNavigate();
@@ -15,8 +16,15 @@ const SigninPage = () => {
         e.preventDefault();
         setError('');
         try {
-            await signInWithEmailAndPassword(auth, email, password);
-            navigate('/home');
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            const user = userCredential.user;
+
+            // Check if user is admin and redirect accordingly
+            if (isAdminUser(user.email)) {
+                navigate('/admin');
+            } else {
+                navigate('/home');
+            }
         } catch (err) {
             setError(err.message);
         }
@@ -24,8 +32,15 @@ const SigninPage = () => {
 
     const handleGoogleSignIn = async () => {
         try {
-            await signInWithPopup(auth, googleProvider);
-            navigate('/home');
+            const result = await signInWithPopup(auth, googleProvider);
+            const user = result.user;
+
+            // Check if user is admin and redirect accordingly
+            if (isAdminUser(user.email)) {
+                navigate('/admin');
+            } else {
+                navigate('/home');
+            }
         } catch (err) {
             setError(err.message);
         }

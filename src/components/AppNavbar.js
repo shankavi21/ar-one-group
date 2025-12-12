@@ -43,7 +43,7 @@ const AppNavbar = ({ transparent = false, user = null }) => {
                             </Nav>
                             <Nav className="align-items-center gap-3">
                                 <div className="d-flex align-items-center text-white">
-                                    <span className="me-2 d-none d-lg-block">Welcome, {displayName.split(' ')[0]}</span>
+                                    <span className="me-2 d-none d-lg-block">Welcome, {displayName}</span>
                                     <Dropdown align="end">
                                         <Dropdown.Toggle variant="link" className="p-0 text-white border-0 shadow-none" id="dropdown-user">
                                             {photoURL ? (

@@ -4,18 +4,18 @@ import { FaSearch, FaHeart, FaStar, FaMapMarkerAlt, FaShieldAlt, FaUserCheck, Fa
 import AppNavbar from '../components/AppNavbar';
 import Footer from '../components/Footer';
 import { auth } from '../firebase';
+import { useApp } from '../context/AppContext';
 
 const HomePage = () => {
     // Basic User Auth Check
     const user = auth.currentUser;
+    const { formatPrice } = useApp(); // Get formatPrice for currency conversion
     const [searchTerm, setSearchTerm] = React.useState('');
     const [savedPackageIds, setSavedPackageIds] = React.useState([]);
-    const [reviews, setReviews] = React.useState([
-        { id: 1, name: 'Happy Traveler 1', country: 'Australia', comment: "Absolutely amazing experience! The guide was knowledgeable and the itinerary was perfect. Highly recommended!", rating: 5 },
-        { id: 2, name: 'Happy Traveler 2', country: 'UK', comment: "Sri Lanka is beautiful and Ar One made it even better. Smooth booking and great service.", rating: 5 },
-        { id: 3, name: 'Happy Traveler 3', country: 'Germany', comment: "Loved the eco-friendly approach. The guides were very respectful of nature.", rating: 4 },
-    ]);
+    const [reviews, setReviews] = React.useState([]);
     const [newReview, setNewReview] = React.useState('');
+    const [selectedRating, setSelectedRating] = React.useState(0); // Star rating state
+    const [hoverRating, setHoverRating] = React.useState(0); // For hover effect
     const packagesSectionRef = React.useRef(null);
 
     React.useEffect(() => {
@@ -23,9 +23,22 @@ const HomePage = () => {
             const saved = JSON.parse(localStorage.getItem('savedTrips') || '[]');
             setSavedPackageIds(saved);
         };
-        loadSaved();
 
-        const handleStorageChange = () => loadSaved();
+        // Load only approved reviews
+        const loadApprovedReviews = () => {
+            const allReviews = JSON.parse(localStorage.getItem('reviews') || '[]');
+            const approvedReviews = allReviews.filter(review => review.status === 'approved');
+            setReviews(approvedReviews);
+        };
+
+        loadSaved();
+        loadApprovedReviews();
+
+        const handleStorageChange = () => {
+            loadSaved();
+            loadApprovedReviews();
+        };
+
         window.addEventListener('storage', handleStorageChange);
         window.addEventListener('local-storage-update', handleStorageChange);
 
@@ -56,16 +69,40 @@ const HomePage = () => {
 
     const handleReviewSubmit = (e) => {
         e.preventDefault();
+
+        // Validate rating
+        if (selectedRating === 0) {
+            alert('Please select a star rating before submitting your review.');
+            return;
+        }
+
         if (newReview.trim()) {
+            // Get existing reviews from localStorage
+            const existingReviews = JSON.parse(localStorage.getItem('reviews') || '[]');
+
             const review = {
-                id: reviews.length + 1,
-                name: user.displayName || user.email.split('@')[0],
+                id: Date.now(),
+                userName: user.displayName || user.email?.split('@')[0] || 'Anonymous',
+                userEmail: user.email || '',
+                packageName: 'General Review', // Can be customized per package
+                packageId: null,
+                name: user.displayName || user.email?.split('@')[0] || 'Anonymous',
                 country: 'Global Traveler',
                 comment: newReview,
-                rating: 5
+                rating: selectedRating, // Use selected rating instead of hardcoded 5
+                date: new Date().toISOString(),
+                status: 'pending' // All new reviews are pending by default
             };
-            setReviews([review, ...reviews]);
+
+            // Save to localStorage for admin review
+            const updatedReviews = [review, ...existingReviews];
+            localStorage.setItem('reviews', JSON.stringify(updatedReviews));
+
+            // Reset form
             setNewReview('');
+            setSelectedRating(0);
+            setHoverRating(0);
+            alert('Thank you for your review! It will be published after admin approval.');
         }
     };
 
@@ -77,11 +114,12 @@ const HomePage = () => {
         { id: 4, name: 'Yala', count: '10 Packages', image: '/yala.jpg', icon: <FaTree /> },
     ];
 
+    // Prices stored as numbers in LKR for proper conversion
     const packages = [
-        { id: 1, title: 'Sigiriya Adventure', location: 'Sigiriya, Sri Lanka', price: 'LKR 45,000', duration: '3 Days', image: '/sigiriya.png', rating: 4.8 },
-        { id: 2, title: 'Ella Hill Climb', location: 'Ella, Sri Lanka', price: 'LKR 35,000', duration: '2 Days', image: '/ella.png', rating: 4.9 },
-        { id: 3, title: 'Coastal Bliss', location: 'Mirissa, Sri Lanka', price: 'LKR 60,000', duration: '4 Days', image: '/beach.png', rating: 4.7 },
-        { id: 4, title: 'Cultural Triangle', location: 'Kandy, Sri Lanka', price: 'LKR 55,000', duration: '3 Days', image: '/kandy.jpg', rating: 4.6 },
+        { id: 1, title: 'Sigiriya Adventure', location: 'Sigiriya, Sri Lanka', price: 45000, duration: '3 Days', image: '/sigiriya.png', rating: 4.8 },
+        { id: 2, title: 'Ella Hill Climb', location: 'Ella, Sri Lanka', price: 35000, duration: '2 Days', image: '/ella.png', rating: 4.9 },
+        { id: 3, title: 'Coastal Bliss', location: 'Mirissa, Sri Lanka', price: 60000, duration: '4 Days', image: '/beach.png', rating: 4.7 },
+        { id: 4, title: 'Cultural Triangle', location: 'Kandy, Sri Lanka', price: 55000, duration: '3 Days', image: '/kandy.jpg', rating: 4.6 },
     ];
 
     const guides = [
@@ -247,7 +285,7 @@ const HomePage = () => {
                                             <FaMapMarkerAlt className="me-1 text-primary-custom" /> {pkg.location}
                                         </div>
                                         <div className="d-flex justify-content-between align-items-center mt-auto">
-                                            <div className="text-primary-custom fw-bold">{pkg.price}</div>
+                                            <div className="text-primary-custom fw-bold">{formatPrice(pkg.price)}</div>
                                             <Button variant="outline-primary" size="sm" className="rounded-pill px-3 border-primary-custom text-primary-custom">View</Button>
                                         </div>
                                     </Card.Body>
@@ -330,7 +368,41 @@ const HomePage = () => {
                         <div className="bg-white p-4 rounded-4 shadow-sm mx-auto" style={{ maxWidth: '600px' }}>
                             <h4 className="fw-bold mb-3 text-center">Write a Review</h4>
                             <Form onSubmit={handleReviewSubmit}>
+                                {/* Star Rating Selector */}
                                 <Form.Group className="mb-3">
+                                    <Form.Label className="fw-bold">Your Rating <span className="text-danger">*</span></Form.Label>
+                                    <div className="d-flex align-items-center gap-2">
+                                        {[1, 2, 3, 4, 5].map((star) => (
+                                            <FaStar
+                                                key={star}
+                                                size={32}
+                                                style={{ cursor: 'pointer', transition: 'all 0.2s' }}
+                                                className={
+                                                    star <= (hoverRating || selectedRating)
+                                                        ? 'text-warning'
+                                                        : 'text-muted'
+                                                }
+                                                onClick={() => setSelectedRating(star)}
+                                                onMouseEnter={() => setHoverRating(star)}
+                                                onMouseLeave={() => setHoverRating(0)}
+                                            />
+                                        ))}
+                                        {selectedRating > 0 && (
+                                            <span className="ms-2 text-secondary">
+                                                {selectedRating} {selectedRating === 1 ? 'star' : 'stars'}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {selectedRating === 0 && (
+                                        <Form.Text className="text-muted">
+                                            Click on the stars to rate (1 = Poor, 5 = Excellent)
+                                        </Form.Text>
+                                    )}
+                                </Form.Group>
+
+                                {/* Review Text */}
+                                <Form.Group className="mb-3">
+                                    <Form.Label className="fw-bold">Your Review <span className="text-danger">*</span></Form.Label>
                                     <Form.Control
                                         as="textarea"
                                         rows={3}

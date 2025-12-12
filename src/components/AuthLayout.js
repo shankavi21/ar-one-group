@@ -16,10 +16,12 @@ const AuthLayout = ({ children, title, subtitle, isLogin, onGoogleSignIn }) => {
                             className="object-cover h-100"
                             style={{ minHeight: '600px' }}
                         />
-                        <div className="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center align-items-center text-white text-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
-                            <h2 className="display-4 fw-bold mb-3">ENJOY THE WORLD</h2>
-                            <p className="fs-5">Explore new horizons with Ar One.</p>
-                            <Button variant="outline-light" className="rounded-pill px-4 mt-3">Learn More</Button>
+                        <div className="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center align-items-center text-white text-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}>
+                            <h2 className="display-4 fw-bold mb-3">AR One Tourism</h2>
+                            <p className="fs-5 mb-2">Your Gateway to Sri Lanka's Wonders</p>
+                            <p className="fs-6 px-4 mb-0" style={{ maxWidth: '400px' }}>
+                                Discover ancient temples, pristine beaches, and lush tea plantations. Experience authentic Sri Lankan culture with expert local guides.
+                            </p>
                         </div>
                     </Col>
                     <Col md={6} className="p-5 bg-white d-flex align-items-center">

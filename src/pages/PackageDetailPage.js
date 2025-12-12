@@ -5,11 +5,13 @@ import { FaStar, FaMapMarkerAlt, FaCheckCircle, FaArrowLeft, FaHotel, FaCar, FaU
 import AppNavbar from '../components/AppNavbar';
 import Footer from '../components/Footer';
 import { auth } from '../firebase';
+import { useApp } from '../context/AppContext';
 
 const PackageDetailPage = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const user = auth.currentUser;
+    const { formatPrice } = useApp(); // Get formatPrice for currency conversion
     const [activeTab, setActiveTab] = useState('overview');
     const [isSaved, setIsSaved] = useState(false);
 
@@ -48,7 +50,7 @@ const PackageDetailPage = () => {
             id: 1,
             title: 'Sigiriya Adventure',
             location: 'Sigiriya, Sri Lanka',
-            price: 'LKR 45,000',
+            price: 45000,
             duration: '3 Days',
             image: '/sigiriya.png',
             rating: 4.8,
@@ -74,7 +76,7 @@ const PackageDetailPage = () => {
             id: 2,
             title: 'Ella Hill Climb',
             location: 'Ella, Sri Lanka',
-            price: 'LKR 35,000',
+            price: 35000,
             duration: '2 Days',
             image: '/ella.png',
             rating: 4.9,
@@ -100,7 +102,7 @@ const PackageDetailPage = () => {
             id: 3,
             title: 'Coastal Bliss',
             location: 'Mirissa, Sri Lanka',
-            price: 'LKR 60,000',
+            price: 60000,
             duration: '4 Days',
             image: '/beach.png',
             rating: 4.7,
@@ -126,7 +128,7 @@ const PackageDetailPage = () => {
             id: 4,
             title: 'Cultural Triangle',
             location: 'Kandy, Sri Lanka',
-            price: 'LKR 55,000',
+            price: 55000,
             duration: '3 Days',
             image: '/kandy.jpg',
             rating: 4.6,
@@ -152,7 +154,7 @@ const PackageDetailPage = () => {
             id: 5,
             title: 'Wild Yala Safari',
             location: 'Yala, Sri Lanka',
-            price: 'LKR 40,000',
+            price: 40000,
             duration: '2 Days',
             image: '/yala.jpg',
             rating: 4.8,
@@ -178,7 +180,7 @@ const PackageDetailPage = () => {
             id: 6,
             title: 'Historic Galle Fort',
             location: 'Galle, Sri Lanka',
-            price: 'LKR 30,000',
+            price: 30000,
             duration: '1 Day',
             image: '/galle.jpg',
             rating: 4.9,
@@ -204,7 +206,7 @@ const PackageDetailPage = () => {
             id: 7,
             title: 'Knuckles Trek',
             location: 'Matale, Sri Lanka',
-            price: 'LKR 50,000',
+            price: 50000,
             duration: '3 Days',
             image: '/knuckles.jpg',
             rating: 4.7,
@@ -230,7 +232,7 @@ const PackageDetailPage = () => {
             id: 8,
             title: 'Jaffna Discovery',
             location: 'Jaffna, Sri Lanka',
-            price: 'LKR 65,000',
+            price: 65000,
             duration: '4 Days',
             image: '/jaffna.jpg',
             rating: 4.5,
@@ -270,11 +272,11 @@ const PackageDetailPage = () => {
         setIsSaved(saved.includes(parseInt(id)));
     }, [id]);
 
-    // Calculate total price dynamically
+    // Calculate total price dynamically (returns price in LKR)
     const calculateTotalPrice = () => {
         if (!selectedHotel) return 0;
 
-        const basePrice = parseInt(pkg.price.replace(/[^0-9]/g, ''));
+        const basePrice = pkg.price; // Already a number in LKR
         const adultPrice = basePrice * bookingData.adults;
         const childPrice = basePrice * CHILDREN_DISCOUNT * bookingData.children;
         return adultPrice + childPrice;
@@ -422,7 +424,7 @@ const PackageDetailPage = () => {
         localStorage.setItem('userBookings', JSON.stringify(existingBookings));
 
         // Show success
-        alert(`✅ Payment Successful!\n\nBooking Confirmed!\nBooking ID: ${bookingId}\n\nPackage: ${pkg.title}\nDate: ${bookingData.date}\nAdults: ${bookingData.adults} | Children: ${bookingData.children}\nGuide: ${selectedGuide.name}\nHotel: ${selectedHotel.name}\n\nTotal Paid: LKR ${totalAmount.toLocaleString()}\n\nYou will receive a confirmation email shortly.`);
+        alert(`✅ Payment Successful!\n\nBooking Confirmed!\nBooking ID: ${bookingId}\n\nPackage: ${pkg.title}\nDate: ${bookingData.date}\nAdults: ${bookingData.adults} | Children: ${bookingData.children}\nGuide: ${selectedGuide.name}\nHotel: ${selectedHotel.name}\n\nTotal Paid: ${formatPrice(totalAmount)}\n\nYou will receive a confirmation email shortly.`);
 
         closeBookingModal();
 
@@ -663,7 +665,7 @@ const PackageDetailPage = () => {
                                 <div className="d-flex justify-content-between align-items-end mb-3">
                                     <div>
                                         <small className="text-secondary">Starting from</small>
-                                        <h3 className="fw-bold text-primary-custom mb-0">{pkg.price}</h3>
+                                        <h3 className="fw-bold text-primary-custom mb-0">{formatPrice(pkg.price)}</h3>
                                         <small className="text-muted">per person</small>
                                     </div>
                                 </div>
@@ -1066,18 +1068,18 @@ const PackageDetailPage = () => {
 
                                 <div className="border-top border-2 pt-3 mt-3">
                                     <Row className="g-2 mb-2">
-                                        <Col xs={7}><span className="text-muted">Adults ({bookingData.adults} × {pkg.price})</span></Col>
-                                        <Col xs={5} className="text-end"><span className="fw-semibold">LKR {(parseInt(pkg.price.replace(/[^0-9]/g, '')) * bookingData.adults).toLocaleString()}</span></Col>
+                                        <Col xs={7}><span className="text-muted">Adults ({bookingData.adults} × {formatPrice(pkg.price)})</span></Col>
+                                        <Col xs={5} className="text-end"><span className="fw-semibold">{formatPrice(pkg.price * bookingData.adults)}</span></Col>
                                     </Row>
                                     {bookingData.children > 0 && (
                                         <Row className="g-2 mb-2">
                                             <Col xs={7}><span className="text-success">Children ({bookingData.children} × 50% off)</span></Col>
-                                            <Col xs={5} className="text-end"><span className="fw-semibold text-success">LKR {(parseInt(pkg.price.replace(/[^0-9]/g, '')) * CHILDREN_DISCOUNT * bookingData.children).toLocaleString()}</span></Col>
+                                            <Col xs={5} className="text-end"><span className="fw-semibold text-success">{formatPrice(pkg.price * CHILDREN_DISCOUNT * bookingData.children)}</span></Col>
                                         </Row>
                                     )}
                                     <Row className="g-2 pt-2 border-top">
                                         <Col xs={7}><span className="fw-bold fs-5">Total Amount</span></Col>
-                                        <Col xs={5} className="text-end"><span className="fw-bold fs-4" style={{ color: '#0891b2' }}>LKR {calculateTotalPrice().toLocaleString()}</span></Col>
+                                        <Col xs={5} className="text-end"><span className="fw-bold fs-4" style={{ color: '#0891b2' }}>{formatPrice(calculateTotalPrice())}</span></Col>
                                     </Row>
                                 </div>
                             </div>
@@ -1145,7 +1147,7 @@ const PackageDetailPage = () => {
                                         fontSize: '16px'
                                     }}
                                 >
-                                    Complete Payment • LKR {calculateTotalPrice().toLocaleString()}
+                                    Complete Payment • {formatPrice(calculateTotalPrice())}
                                 </Button>
                             </div>
                         </div>
