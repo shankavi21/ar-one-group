@@ -1,0 +1,286 @@
+{/* Multi-Step Booking Modal */}
+<Modal show={showBookingModal} onHide={closeBookingModal} size="lg" centered>
+    <Modal.Header closeButton className="border-0">
+        <Modal.Title className="fw-bold">
+            Book {pkg.title}
+            <div className="small text-muted fw-normal mt-1">
+                Step {bookingStep} of 3
+            </div>
+        </Modal.Title>
+    </Modal.Header>
+    <Modal.Body className="p-4">
+        {/* Step 1: Booking Details */}
+        {bookingStep === 1 && (
+            <Form onSubmit={(e) => { e.preventDefault(); handleNextStep(); }}>
+                <h6 className="fw-bold mb-3">Traveler Information</h6>
+                <Row>
+                    <Col md={6} className="mb-3">
+                        <Form.Group>
+                            <Form.Label className="fw-bold">Full Name *</Form.Label>
+                            <Form.Control
+                                type="text"
+                                required
+                                value={bookingData.name}
+                                onChange={(e) => setBookingData({ ...bookingData, name: e.target.value })}
+                                placeholder="Enter your full name"
+                            />
+                        </Form.Group>
+                    </Col>
+                    <Col md={6} className="mb-3">
+                        <Form.Group>
+                            <Form.Label className="fw-bold">Email *</Form.Label>
+                            <Form.Control
+                                type="email"
+                                required
+                                value={bookingData.email}
+                                onChange={(e) => setBookingData({ ...bookingData, email: e.target.value })}
+                                placeholder="your.email@example.com"
+                            />
+                        </Form.Group>
+                    </Col>
+                </Row>
+                <Row>
+                    <Col md={6} className="mb-3">
+                        <Form.Group>
+                            <Form.Label className="fw-bold">Phone Number *</Form.Label>
+                            <Form.Control
+                                type="tel"
+                                required
+                                value={bookingData.phone}
+                                onChange={(e) => setBookingData({ ...bookingData, phone: e.target.value })}
+                                placeholder="+94 XX XXX XXXX"
+                            />
+                        </Form.Group>
+                    </Col>
+                    <Col md={6} className="mb-3">
+                        <Form.Group>
+                            <Form.Label className="fw-bold">Travel Date *</Form.Label>
+                            <Form.Control
+                                type="date"
+                                required
+                                value={bookingData.date}
+                                onChange={(e) => setBookingData({ ...bookingData, date: e.target.value })}
+                                min={new Date().toISOString().split('T')[0]}
+                            />
+                        </Form.Group>
+                    </Col>
+                </Row>
+                
+                <h6 className="fw-bold mb-3 mt-3">Number of Travelers</h6>
+                <Row>
+                    <Col md={6} className="mb-3">
+                        <Form.Group>
+                            <Form.Label className="fw-bold">Adults (Age 18+) *</Form.Label>
+                            <Form.Control
+                                type="number"
+                                required
+                                min="1"
+                                max="20"
+                                value={bookingData.adults}
+                                onChange={(e) => setBookingData({ ...bookingData, adults: parseInt(e.target.value) })}
+                            />
+                            <Form.Text className="text-muted">
+                                {pkg.price} per adult
+                            </Form.Text>
+                        </Form.Group>
+                    </Col>
+                    <Col md={6} className="mb-3">
+                        <Form.Group>
+                            <Form.Label className="fw-bold">Children (Under 18)</Form.Label>
+                            <Form.Control
+                                type="number"
+                                min="0"
+                                max="10"
+                                value={bookingData.children}
+                                onChange={(e) => setBookingData({ ...bookingData, children: parseInt(e.target.value) })}
+                            />
+                            <Form.Text className="text-success">
+                                50% discount for children
+                            </Form.Text>
+                        </Form.Group>
+                    </Col>
+                </Row>
+                
+                <Form.Group className="mb-3">
+                    <Form.Label className="fw-bold">Special Requests (Optional)</Form.Label>
+                    <Form.Control
+                        as="textarea"
+                        rows={2}
+                        value={bookingData.specialRequests}
+                        onChange={(e) => setBookingData({ ...bookingData, specialRequests: e.target.value })}
+                        placeholder="Dietary requirements, accessibility needs, etc."
+                    />
+                </Form.Group>
+
+                <div className="d-flex gap-3 mt-4">
+                    <Button type="submit" variant="primary" size="lg" className="btn-primary-custom flex-grow-1 rounded-pill fw-bold">
+                        Continue to Select Guide & Hotel
+                    </Button>
+                    <Button variant="outline-secondary" onClick={closeBookingModal} className="rounded-pill">
+                        Cancel
+                    </Button>
+                </div>
+            </Form>
+        )}
+
+        {/* Step 2: Select Guide & Hotel */}
+        {bookingStep === 2 && (
+            <div>
+                <h6 className="fw-bold mb-3">Select Your Guide</h6>
+                <Row className="mb-4">
+                    {guides.slice(0, 3).map(guide => (
+                        <Col md={4} key={guide.id} className="mb-3">
+                            <Card 
+                                className={`border ${selectedGuide?.id === guide.id ? 'border-primary border-3' : ''} rounded-3 h-100 cursor-pointer`}
+                                onClick={() => setSelectedGuide(guide)}
+                                style={{cursor: 'pointer'}}
+                            >
+                                <Card.Body className="text-center p-3">
+                                    <Image 
+                                        src={guide.image} 
+                                        roundedCircle 
+                                        style={{width: '70px', height: '70px', objectFit: 'cover'}} 
+                                        className="mb-2"
+                                    />
+                                    <h6 className="fw-bold mb-0">{guide.name}</h6>
+                                    <small className="text-muted d-block">{guide.role}</small>
+                                    <small className="text-info">{guide.experience} exp.</small>
+                                    {selectedGuide?.id === guide.id && (
+                                        <div className="mt-2">
+                                            <FaCheckCircle className="text-primary" size={20} />
+                                        </div>
+                                    )}
+                                </Card.Body>
+                            </Card>
+                        </Col>
+                    ))}
+                </Row>
+
+                <h6 className="fw-bold mb-3">Select Your Hotel</h6>
+                <Row>
+                    {pkg.hotels?.map((hotel, idx) => (
+                        <Col md={6} key={idx} className="mb-3">
+                            <Card 
+                                className={`border ${selectedHotel?.name === hotel.name ? 'border-primary border-3' : ''} rounded-3 cursor-pointer`}
+                                onClick={() => setSelectedHotel(hotel)}
+                                style={{cursor: 'pointer'}}
+                            >
+                                <Image src={hotel.image} style={{height: '100px', objectFit: 'cover'}} className="rounded-top" />
+                                <Card.Body className="p-3">
+                                    <div className="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <h6 className="fw-bold mb-1">{hotel.name}</h6>
+                                            <Badge bg="secondary" className="mb-1">{hotel.type}</Badge>
+                                            <p className="text-muted small mb-0">{hotel.description}</p>
+                                        </div>
+                                        {selectedHotel?.name === hotel.name && (
+                                            <FaCheckCircle className="text-primary" size={20} />
+                                        )}
+                                    </div>
+                                </Card.Body>
+                            </Card>
+                        </Col>
+                    ))}
+                </Row>
+
+                <div className="d-flex gap-3 mt-4">
+                    <Button variant="outline-secondary" onClick={handlePrevStep} className="rounded-pill">
+                        Back
+                    </Button>
+                    <Button 
+                        variant="primary" 
+                        size="lg" 
+                        className="btn-primary-custom flex-grow-1 rounded-pill fw-bold"
+                        onClick={handleNextStep}
+                    >
+                        Continue to Payment
+                    </Button>
+                </div>
+            </div>
+        )}
+
+        {/* Step 3: Review & Payment */}
+        {bookingStep === 3 && (
+            <div>
+                <h6 className="fw-bold mb-3">Booking Summary</h6>
+                <div className="bg-light p-3 rounded-3 mb-3">
+                    <Row className="mb-2">
+                        <Col xs={6} className="text-muted">Package:</Col>
+                        <Col xs={6} className="text-end fw-bold">{pkg.title}</Col>
+                    </Row>
+                    <Row className="mb-2">
+                        <Col xs={6} className="text-muted">Date:</Col>
+                        <Col xs={6} className="text-end fw-bold">{new Date(bookingData.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</Col>
+                    </Row>
+                    <Row className="mb-2">
+                        <Col xs={6} className="text-muted">Adults:</Col>
+                        <Col xs={6} className="text-end fw-bold">{bookingData.adults}</Col>
+                    </Row>
+                    <Row className="mb-2">
+                        <Col xs={6} className="text-muted">Children:</Col>
+                        <Col xs={6} className="text-end fw-bold">{bookingData.children}</Col>
+                    </Row>
+                    <Row className="mb-2">
+                        <Col xs={6} className="text-muted">Guide:</Col>
+                        <Col xs={6} className="text-end fw-bold">{selectedGuide?.name}</Col>
+                    </Row>
+                    <Row className="mb-2">
+                        <Col xs={6} className="text-muted">Hotel:</Col>
+                        <Col xs={6} className="text-end fw-bold">{selectedHotel?.name}</Col>
+                    </Row>
+                    <hr />
+                    <Row className="mb-2">
+                        <Col xs={6} className="text-muted">Adults ({bookingData.adults} × {pkg.price}):</Col>
+                        <Col xs={6} className="text-end">LKR {(parseInt(pkg.price.replace(/[^0-9]/g, '')) * bookingData.adults).toLocaleString()}</Col>
+                    </Row>
+                    {bookingData.children > 0 && (
+                        <Row className="mb-2">
+                            <Col xs={6} className="text-muted">Children ({bookingData.children} × 50% off):</Col>
+                            <Col xs={6} className="text-end text-success">LKR {(parseInt(pkg.price.replace(/[^0-9]/g, '')) * CHILDREN_DISCOUNT * bookingData.children).toLocaleString()}</Col>
+                        </Row>
+                    )}
+                    <Row className="mb-2">
+                        <Col xs={6} className="fw-bold fs-5">Total:</Col>
+                        <Col xs={6} className="text-end fw-bold text-primary-custom fs-5">LKR {calculateTotalPrice().toLocaleString()}</Col>
+                    </Row>
+                </div>
+
+                <h6 className="fw-bold mb-3">Select Payment Method</h6>
+                <div className="mb-3">
+                    {['Credit Card', 'Debit Card', 'PayPal', 'Bank Transfer'].map(method => (
+                        <Form.Check 
+                            key={method}
+                            type="radio"
+                            label={method}
+                            name="paymentMethod"
+                            id={`payment-${method}`}
+                            checked={paymentMethod === method}
+                            onChange={() => setPaymentMethod(method)}
+                            className="mb-2"
+                        />
+                    ))}
+                </div>
+
+                {paymentMethod && (
+                    <div className="alert alert-info">
+                        <small>🔒 Your payment is secure and encrypted. You will be redirected to the payment gateway.</small>
+                    </div>
+                )}
+
+                <div className="d-flex gap-3 mt-4">
+                    <Button variant="outline-secondary" onClick={handlePrevStep} className="rounded-pill">
+                        Back
+                    </Button>
+                    <Button 
+                        variant="success" 
+                        size="lg" 
+                        className="flex-grow-1 rounded-pill fw-bold"
+                        onClick={handleNextStep}
+                    >
+                        Complete Payment (LKR {calculateTotalPrice().toLocaleString()})
+                    </Button>
+                </div>
+            </div>
+        )}
+    </Modal.Body>
+</Modal>
