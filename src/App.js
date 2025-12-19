@@ -20,6 +20,7 @@ import SettingsPage from './pages/SettingsPage';
 // Admin imports
 import AdminProtectedRoute from './components/AdminProtectedRoute';
 import AdminLayout from './admin/components/AdminLayout';
+import AdminSigninPage from './admin/pages/AdminSigninPage';
 import AdminDashboard from './admin/pages/AdminDashboard';
 import UserManagement from './admin/pages/UserManagement';
 import PackageManagement from './admin/pages/PackageManagement';
@@ -27,6 +28,7 @@ import GuideManagement from './admin/pages/GuideManagement';
 import BookingManagement from './admin/pages/BookingManagement';
 import ContactManagement from './admin/pages/ContactManagement';
 import ReviewManagement from './admin/pages/ReviewManagement';
+import OfferManagement from './admin/pages/OfferManagement';
 import AdminSettings from './admin/pages/AdminSettings';
 import Analytics from './admin/pages/Analytics';
 
@@ -53,6 +55,7 @@ function App() {
           <Route path="/settings" element={<SettingsPage />} />
 
           {/* Admin Routes - Protected */}
+          <Route path="/admin/login" element={<AdminSigninPage />} />
           <Route
             path="/admin"
             element={
@@ -68,6 +71,7 @@ function App() {
             <Route path="bookings" element={<BookingManagement />} />
             <Route path="contacts" element={<ContactManagement />} />
             <Route path="reviews" element={<ReviewManagement />} />
+            <Route path="offers" element={<OfferManagement />} />
             <Route path="settings" element={<AdminSettings />} />
             <Route path="analytics" element={<Analytics />} />
           </Route>

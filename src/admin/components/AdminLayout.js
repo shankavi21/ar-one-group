@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Container, Row, Col, Nav, Navbar, Dropdown, Image } from 'react-bootstrap';
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { FaHome, FaUsers, FaBox, FaUserTie, FaCalendarCheck, FaEnvelope, FaStar, FaCog, FaChartBar, FaSignOutAlt, FaBars } from 'react-icons/fa';
+import { FaHome, FaUsers, FaBox, FaUserTie, FaCalendarCheck, FaEnvelope, FaStar, FaCog, FaChartBar, FaSignOutAlt, FaBars, FaTags } from 'react-icons/fa';
 import { auth } from '../../firebase';
 import { signOut } from 'firebase/auth';
 
@@ -27,6 +27,7 @@ const AdminLayout = () => {
         { path: '/admin/guides', icon: FaUserTie, label: 'Guides' },
         { path: '/admin/bookings', icon: FaCalendarCheck, label: 'Bookings' },
         { path: '/admin/contacts', icon: FaEnvelope, label: 'Contacts' },
+        { path: '/admin/offers', icon: FaTags, label: 'Offers' },
         { path: '/admin/reviews', icon: FaStar, label: 'Reviews' },
         { path: '/admin/settings', icon: FaCog, label: 'Settings' },
         { path: '/admin/analytics', icon: FaChartBar, label: 'Analytics' },

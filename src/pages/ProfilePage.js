@@ -1,29 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Form, Button, Tab, Tabs, Image, Badge, Alert } from 'react-bootstrap';
 import { FaUserEdit, FaLock, FaHistory, FaCog, FaCamera, FaSave, FaTimes } from 'react-icons/fa';
-import { auth } from '../firebase';
 import { updateProfile, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
+import { auth, db } from '../firebase';
+import { doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import AppNavbar from '../components/AppNavbar';
 import Footer from '../components/Footer';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { generateBookingPDF } from '../utils/pdfGenerator';
+import { getUserBookings } from '../services/firestoreService';
 
 const ProfilePage = () => {
     const navigate = useNavigate();
-    const user = auth.currentUser;
-    const { currency, language, notifications, updateCurrency, updateLanguage, updateNotifications, formatPrice } = useApp();
+    const { user, userProfile, currency, language, notifications, updateCurrency, updateLanguage, updateNotifications, formatPrice, refreshUserProfile } = useApp();
 
     const [activeTab, setActiveTab] = useState('profile');
     const [editing, setEditing] = useState(false);
+    const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState({ type: '', text: '' });
 
-    // Profile data
+    // Profile data (Scoped to UID)
     const [profileData, setProfileData] = useState({
-        displayName: localStorage.getItem('userDisplayName') || user?.displayName || '',
+        displayName: userProfile?.name || localStorage.getItem(`userDisplayName_${user?.uid}`) || user?.displayName || '',
         email: user?.email || '',
-        phone: localStorage.getItem('userPhone') || '',
-        bio: localStorage.getItem('userBio') || '',
-        photoURL: localStorage.getItem('userPhotoURL') || user?.photoURL || ''
+        phone: userProfile?.phone || localStorage.getItem(`userPhone_${user?.uid}`) || '',
+        bio: userProfile?.bio || localStorage.getItem(`userBio_${user?.uid}`) || '',
+        photoURL: userProfile?.photoURL || localStorage.getItem(`userPhotoURL_${user?.uid}`) || user?.photoURL || ''
     });
 
     // Original data backup for cancel functionality
@@ -55,27 +58,31 @@ const ProfilePage = () => {
             return;
         }
 
-        // Load custom user data from localStorage
-        const customDisplayName = localStorage.getItem('userDisplayName');
-        const customPhotoURL = localStorage.getItem('userPhotoURL');
-        const customPhone = localStorage.getItem('userPhone');
-        const customBio = localStorage.getItem('userBio');
+        if (!editing) {
+            // Load user data prioritizing context (Firestore) then localStorage then Auth (Scoped to UID)
+            const loadedProfile = {
+                displayName: userProfile?.name || localStorage.getItem(`userDisplayName_${user?.uid}`) || user?.displayName || '',
+                email: userProfile?.email || user?.email || '',
+                phone: userProfile?.phone || localStorage.getItem(`userPhone_${user?.uid}`) || '',
+                bio: userProfile?.bio || localStorage.getItem(`userBio_${user?.uid}`) || '',
+                photoURL: userProfile?.photoURL || localStorage.getItem(`userPhotoURL_${user?.uid}`) || user?.photoURL || ''
+            };
 
-        const loadedProfile = {
-            displayName: customDisplayName || user?.displayName || '',
-            email: user?.email || '',
-            phone: customPhone || '',
-            bio: customBio || '',
-            photoURL: customPhotoURL || user?.photoURL || ''
+            setProfileData(loadedProfile);
+            setOriginalData(loadedProfile);
+        }
+
+        // Load bookings from Firestore for real-time accuracy
+        const fetchBookings = async () => {
+            try {
+                const data = await getUserBookings(user.uid);
+                setBookings(data || []);
+            } catch (error) {
+                console.error("Error loading bookings history", error);
+            }
         };
-
-        setProfileData(loadedProfile);
-        setOriginalData(loadedProfile);
-
-        // Load bookings
-        const userBookings = JSON.parse(localStorage.getItem('userBookings') || '[]');
-        setBookings(userBookings);
-    }, [user, navigate]);
+        fetchBookings();
+    }, [user, navigate, userProfile, editing]);
 
     const showMessage = (type, text) => {
         setMessage({ type, text });
@@ -83,32 +90,53 @@ const ProfilePage = () => {
     };
 
     const handleProfileUpdate = async () => {
+        setSaving(true);
         try {
-            // Save to localStorage first (always works)
-            localStorage.setItem('userDisplayName', profileData.displayName);
-            localStorage.setItem('userPhone', profileData.phone);
-            localStorage.setItem('userBio', profileData.bio);
-            localStorage.setItem('userPhotoURL', profileData.photoURL);
+            console.log("Starting profile update...", profileData);
 
-            // Try to update Firebase profile (may fail in demo mode)
-            try {
-                if (user && !user.isAnonymous) {
+            // 1. Update Firebase Auth Profile
+            if (user && !user.isAnonymous) {
+                try {
                     await updateProfile(user, {
                         displayName: profileData.displayName,
                         photoURL: profileData.photoURL
                     });
+                    console.log("Auth profile updated");
+                } catch (authError) {
+                    console.warn('Firebase Auth update skipped or failed:', authError.message);
                 }
-            } catch (firebaseError) {
-                // Firebase update failed, but localStorage succeeded
-                console.log('Firebase update skipped:', firebaseError.message);
+
+                // 2. Update Firestore (Primary Persistence)
+                const userRef = doc(db, "users", user.uid);
+                await setDoc(userRef, {
+                    name: profileData.displayName,
+                    phone: profileData.phone,
+                    bio: profileData.bio,
+                    photoURL: profileData.photoURL,
+                    updatedAt: serverTimestamp()
+                }, { merge: true });
+                console.log("Firestore document updated");
             }
 
-            // Update original data after successful save
+            // 3. Update localStorage (UI Synchronization) - Scoped to UID
+            localStorage.setItem(`userDisplayName_${user.uid}`, profileData.displayName);
+            localStorage.setItem(`userPhone_${user.uid}`, profileData.phone);
+            localStorage.setItem(`userBio_${user.uid}`, profileData.bio);
+            localStorage.setItem(`userPhotoURL_${user.uid}`, profileData.photoURL);
+
+            // 4. Update local state
             setOriginalData({ ...profileData });
             setEditing(false);
             showMessage('success', 'Profile updated successfully!');
+
+            // 5. Notify the rest of the app & Refresh Global State
+            await refreshUserProfile();
+            window.dispatchEvent(new Event('local-storage-update'));
         } catch (error) {
+            console.error("Profile update error:", error);
             showMessage('error', 'Failed to update profile: ' + error.message);
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -253,10 +281,20 @@ const ProfilePage = () => {
                                                     </Button>
                                                 ) : (
                                                     <div className="d-flex gap-2">
-                                                        <Button variant="success" onClick={handleProfileUpdate} className="rounded-pill">
-                                                            <FaSave className="me-2" />Save
+                                                        <Button
+                                                            variant="success"
+                                                            onClick={handleProfileUpdate}
+                                                            className="rounded-pill"
+                                                            disabled={saving}
+                                                        >
+                                                            {saving ? 'Saving...' : <><FaSave className="me-2" />Save</>}
                                                         </Button>
-                                                        <Button variant="outline-secondary" onClick={handleCancelEdit} className="rounded-pill">
+                                                        <Button
+                                                            variant="outline-secondary"
+                                                            onClick={handleCancelEdit}
+                                                            className="rounded-pill"
+                                                            disabled={saving}
+                                                        >
                                                             <FaTimes className="me-2" />Cancel
                                                         </Button>
                                                     </div>
@@ -455,7 +493,15 @@ const ProfilePage = () => {
                                                                         </div>
                                                                         <div className="text-end">
                                                                             <Badge bg="success" className="mb-2">{booking.status}</Badge>
-                                                                            <h5 className="fw-bold mb-0" style={{ color: '#0891b2' }}>{formatPrice(booking.totalAmount)}</h5>
+                                                                            <h5 className="fw-bold mb-2" style={{ color: '#0891b2' }}>{formatPrice(booking.totalAmount)}</h5>
+                                                                            <Button
+                                                                                variant="outline-success"
+                                                                                size="sm"
+                                                                                className="rounded-pill px-3"
+                                                                                onClick={() => generateBookingPDF(booking, formatPrice)}
+                                                                            >
+                                                                                Download
+                                                                            </Button>
                                                                         </div>
                                                                     </div>
                                                                 </Col>

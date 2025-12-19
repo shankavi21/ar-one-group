@@ -6,16 +6,30 @@ import Footer from '../components/Footer';
 import { auth } from '../firebase';
 import { useApp } from '../context/AppContext';
 
+import { getUserBookings } from '../services/firestoreService';
+import { generateBookingPDF } from '../utils/pdfGenerator';
+
 const MyBookingsPage = () => {
-    const user = auth.currentUser;
-    const { formatPrice } = useApp(); // Get formatPrice for currency conversion
+    const { user, loadingUser, formatPrice } = useApp(); // Get user and formatPrice from AppContext
     const [bookings, setBookings] = useState([]);
 
     useEffect(() => {
-        // Load bookings from localStorage
-        const savedBookings = JSON.parse(localStorage.getItem('userBookings') || '[]');
-        setBookings(savedBookings.sort((a, b) => new Date(b.bookingDate) - new Date(a.bookingDate)));
-    }, []);
+        const fetchBookings = async () => {
+            if (loadingUser) return; // Wait for user to be loaded
+
+            if (user) {
+                try {
+                    const data = await getUserBookings(user.uid);
+                    setBookings(data);
+                } catch (error) {
+                    console.error("Error loading bookings", error);
+                }
+            } else {
+                setBookings([]);
+            }
+        };
+        fetchBookings();
+    }, [user, loadingUser]);
 
     const getStatusBadge = (status) => {
         const variants = {
@@ -141,13 +155,18 @@ const MyBookingsPage = () => {
                                                 >
                                                     View Package
                                                 </Button>
-                                                {booking.status === 'confirmed' && (
-                                                    <Button variant="outline-success" size="sm" className="rounded-pill">
-                                                        Download Voucher
-                                                    </Button>
-                                                )}
+
+                                                <Button
+                                                    variant="outline-success"
+                                                    size="sm"
+                                                    className="rounded-pill"
+                                                    onClick={() => generateBookingPDF(booking, formatPrice)}
+                                                >
+                                                    Download Invoice
+                                                </Button>
+
                                                 {booking.status === 'pending' && (
-                                                    <Button variant="outline-warning" size="sm" className="rounded-pill">
+                                                    <Button variant="warning" size="sm" className="rounded-pill">
                                                         Complete Payment
                                                     </Button>
                                                 )}
@@ -158,11 +177,11 @@ const MyBookingsPage = () => {
                                 <Card.Footer className="bg-light border-0 p-3">
                                     <small className="text-muted">
                                         <FaClock className="me-1" />
-                                        Booked on {new Date(booking.bookingDate).toLocaleDateString('en-US', {
+                                        Booked on {booking.createdAt ? new Date(booking.createdAt.seconds ? booking.createdAt.toDate() : booking.createdAt).toLocaleDateString('en-US', {
                                             year: 'numeric',
                                             month: 'long',
                                             day: 'numeric'
-                                        })}
+                                        }) : 'N/A'}
                                     </small>
                                 </Card.Footer>
                             </Card>

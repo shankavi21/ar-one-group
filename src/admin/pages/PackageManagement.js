@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Button, Form, Modal, Badge, InputGroup, Row, Col } from 'react-bootstrap';
+import { Card, Table, Button, Form, Modal, Badge, InputGroup, Row, Col, Tabs, Tab } from 'react-bootstrap';
 import { FaSearch, FaEdit, FaTrash, FaPlus, FaEye } from 'react-icons/fa';
+
+import { getAllPackages, addPackage, updatePackage, deletePackage } from '../../services/firestoreService';
 
 const PackageManagement = () => {
     const [packages, setPackages] = useState([]);
@@ -16,8 +18,14 @@ const PackageManagement = () => {
         description: '',
         image: '',
         rating: 4.5,
-        included: []
+        included: [],
+        transport: '',
+        food: '',
+        mapLocation: '',
+        gallery: [],
+        hotels: []
     });
+    const [jsonError, setJsonError] = useState('');
 
     useEffect(() => {
         loadPackages();
@@ -27,19 +35,13 @@ const PackageManagement = () => {
         filterPackages();
     }, [searchTerm, packages]);
 
-    const loadPackages = () => {
-        // Load packages (currently hardcoded in pages)
-        const packagesData = [
-            { id: 1, title: 'Sigiriya Adventure', location: 'Sigiriya, Sri Lanka', price: 45000, duration: '3 Days', image: '/sigiriya.png', rating: 4.8, status: 'active' },
-            { id: 2, title: 'Ella Hill Climb', location: 'Ella, Sri Lanka', price: 35000, duration: '2 Days', image: '/ella.png', rating: 4.9, status: 'active' },
-            { id: 3, title: 'Coastal Bliss', location: 'Mirissa, Sri Lanka', price: 60000, duration: '4 Days', image: '/beach.png', rating: 4.7, status: 'active' },
-            { id: 4, title: 'Cultural Triangle', location: 'Kandy, Sri Lanka', price: 55000, duration: '3 Days', image: '/kandy.jpg', rating: 4.6, status: 'active' },
-            { id: 5, title: 'Wild Yala Safari', location: 'Yala, Sri Lanka', price: 40000, duration: '2 Days', image: '/yala.jpg', rating: 4.8, status: 'active' },
-            { id: 6, title: 'Historic Galle Fort', location: 'Galle, Sri Lanka', price: 30000, duration: '1 Day', image: '/galle.jpg', rating: 4.9, status: 'active' },
-            { id: 7, title: 'Knuckles Trek', location: 'Matale, Sri Lanka', price: 50000, duration: '3 Days', image: '/knuckles.jpg', rating: 4.7, status: 'active' },
-            { id: 8, title: 'Jaffna Discovery', location: 'Jaffna, Sri Lanka', price: 65000, duration: '4 Days', image: '/jaffna.jpg', rating: 4.5, status: 'active' },
-        ];
-        setPackages(packagesData);
+    const loadPackages = async () => {
+        try {
+            const data = await getAllPackages();
+            setPackages(data);
+        } catch (error) {
+            console.error("Failed to load packages", error);
+        }
     };
 
     const filterPackages = () => {
@@ -65,32 +67,71 @@ const PackageManagement = () => {
             description: pkg.description || '',
             image: pkg.image || '',
             rating: pkg.rating || 4.5,
-            included: pkg.included || []
+            included: pkg.included || [],
+            transport: pkg.transport || '',
+            food: pkg.food || '',
+            mapLocation: pkg.mapLocation || '',
+            gallery: pkg.gallery || [],
+            hotels: pkg.hotels || []
         });
+        setJsonError(''); // Clear errors
         setShowModal(true);
     };
 
-    const handleSave = () => {
-        // In real app, save to Firestore
-        const updatedPackages = packages.map(pkg =>
-            pkg.id === editingPackage.id ? { ...pkg, ...formData } : pkg
-        );
-        setPackages(updatedPackages);
-        setShowModal(false);
-        setEditingPackage(null);
-        alert('Package updated successfully!');
+    const handleSave = async () => {
+        try {
+            // Parse hotels if it's a string (from text area)
+            let parsedHotels = formData.hotels;
+            if (typeof parsedHotels === 'string') {
+                try {
+                    parsedHotels = JSON.parse(parsedHotels);
+                } catch (e) {
+                    alert("Invalid JSON in Hotels field. Please check format.");
+                    return;
+                }
+            }
+
+            // Ensure numeric values are saved as numbers
+            const packageData = {
+                ...formData,
+                price: Number(formData.price),
+                rating: Number(formData.rating),
+                hotels: parsedHotels
+            };
+
+            if (editingPackage && editingPackage.id) {
+                // Update existing
+                await updatePackage(editingPackage.id, packageData);
+                alert('Package updated successfully!');
+            } else {
+                // Add new
+                await addPackage({ ...packageData, status: 'active' });
+                alert('Package added successfully!');
+            }
+            loadPackages(); // Reload to get fresh data
+            setShowModal(false);
+            setEditingPackage(null);
+        } catch (error) {
+            console.error("Error saving package", error);
+            alert("Failed to save package");
+        }
     };
 
-    const handleDelete = (packageId) => {
+    const handleDelete = async (packageId) => {
         if (window.confirm('Are you sure you want to delete this package?')) {
-            const updatedPackages = packages.filter(pkg => pkg.id !== packageId);
-            setPackages(updatedPackages);
-            alert('Package deleted successfully!');
+            try {
+                await deletePackage(packageId);
+                loadPackages();
+                alert('Package deleted successfully!');
+            } catch (error) {
+                console.error("Error deleting package", error);
+                alert("Failed to delete package");
+            }
         }
     };
 
     const handleAddNew = () => {
-        setEditingPackage({ id: Date.now() }); // New package with temp ID
+        setEditingPackage(null); // Clear editing state
         setFormData({
             title: '',
             location: '',
@@ -99,8 +140,14 @@ const PackageManagement = () => {
             description: '',
             image: '',
             rating: 4.5,
-            included: []
+            included: [],
+            transport: '',
+            food: '',
+            mapLocation: '',
+            gallery: [],
+            hotels: []
         });
+        setJsonError('');
         setShowModal(true);
     };
 
@@ -154,7 +201,7 @@ const PackageManagement = () => {
                         <Card.Body>
                             <p className="text-muted mb-1">Avg Price</p>
                             <h3 className="fw-bold mb-0 text-primary">
-                                LKR {Math.round(packages.reduce((sum, p) => sum + p.price, 0) / packages.length).toLocaleString()}
+                                LKR {Math.round(packages.reduce((sum, p) => sum + Number(p.price), 0) / (packages.length || 1)).toLocaleString()}
                             </h3>
                         </Card.Body>
                     </Card>
@@ -218,79 +265,175 @@ const PackageManagement = () => {
                 </Modal.Header>
                 <Modal.Body>
                     <Form>
-                        <Row>
-                            <Col md={6}>
+                        <Tabs defaultActiveKey="basic" className="mb-3">
+                            <Tab eventKey="basic" title="Basic Info">
+                                <Row>
+                                    <Col md={6}>
+                                        <Form.Group className="mb-3">
+                                            <Form.Label>Title *</Form.Label>
+                                            <Form.Control
+                                                value={formData.title}
+                                                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                                                required
+                                            />
+                                        </Form.Group>
+                                    </Col>
+                                    <Col md={6}>
+                                        <Form.Group className="mb-3">
+                                            <Form.Label>Location *</Form.Label>
+                                            <Form.Control
+                                                value={formData.location}
+                                                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                                            />
+                                        </Form.Group>
+                                    </Col>
+                                </Row>
+                                <Row>
+                                    <Col md={4}>
+                                        <Form.Group className="mb-3">
+                                            <Form.Label>Price (LKR) *</Form.Label>
+                                            <Form.Control
+                                                type="number"
+                                                value={formData.price}
+                                                onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                                            />
+                                        </Form.Group>
+                                    </Col>
+                                    <Col md={4}>
+                                        <Form.Group className="mb-3">
+                                            <Form.Label>Duration *</Form.Label>
+                                            <Form.Control
+                                                value={formData.duration}
+                                                onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
+                                                placeholder="e.g., 3 Days"
+                                            />
+                                        </Form.Group>
+                                    </Col>
+                                    <Col md={4}>
+                                        <Form.Group className="mb-3">
+                                            <Form.Label>Rating</Form.Label>
+                                            <Form.Control
+                                                type="number"
+                                                step="0.1"
+                                                min="0"
+                                                max="5"
+                                                value={formData.rating}
+                                                onChange={(e) => setFormData({ ...formData, rating: e.target.value })}
+                                            />
+                                        </Form.Group>
+                                    </Col>
+                                </Row>
                                 <Form.Group className="mb-3">
-                                    <Form.Label>Title *</Form.Label>
+                                    <Form.Label>Main Image URL</Form.Label>
                                     <Form.Control
-                                        value={formData.title}
-                                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                                        required
+                                        value={formData.image}
+                                        onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                                        placeholder="/path/to/image.jpg"
                                     />
                                 </Form.Group>
-                            </Col>
-                            <Col md={6}>
+                            </Tab>
+
+                            <Tab eventKey="details" title="Details">
                                 <Form.Group className="mb-3">
-                                    <Form.Label>Location *</Form.Label>
+                                    <Form.Label>Description</Form.Label>
                                     <Form.Control
-                                        value={formData.location}
-                                        onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                                        as="textarea"
+                                        rows={4}
+                                        value={formData.description}
+                                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                                     />
                                 </Form.Group>
-                            </Col>
-                        </Row>
-                        <Row>
-                            <Col md={4}>
+                                <Row>
+                                    <Col md={6}>
+                                        <Form.Group className="mb-3">
+                                            <Form.Label>Transport Details</Form.Label>
+                                            <Form.Control
+                                                value={formData.transport}
+                                                onChange={(e) => setFormData({ ...formData, transport: e.target.value })}
+                                                placeholder="e.g. Private AC Car"
+                                            />
+                                        </Form.Group>
+                                    </Col>
+                                    <Col md={6}>
+                                        <Form.Group className="mb-3">
+                                            <Form.Label>Food/Meals</Form.Label>
+                                            <Form.Control
+                                                value={formData.food}
+                                                onChange={(e) => setFormData({ ...formData, food: e.target.value })}
+                                                placeholder="e.g. Breakfast included"
+                                            />
+                                        </Form.Group>
+                                    </Col>
+                                </Row>
                                 <Form.Group className="mb-3">
-                                    <Form.Label>Price (LKR) *</Form.Label>
+                                    <Form.Label>Map Location URL (Link)</Form.Label>
                                     <Form.Control
-                                        type="number"
-                                        value={formData.price}
-                                        onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                                        value={formData.mapLocation}
+                                        onChange={(e) => setFormData({ ...formData, mapLocation: e.target.value })}
+                                        placeholder="Location name for map"
                                     />
                                 </Form.Group>
-                            </Col>
-                            <Col md={4}>
+                            </Tab>
+
+                            <Tab eventKey="lists" title="Included & Gallery">
                                 <Form.Group className="mb-3">
-                                    <Form.Label>Duration *</Form.Label>
+                                    <Form.Label>Included Items (One per line)</Form.Label>
                                     <Form.Control
-                                        value={formData.duration}
-                                        onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
-                                        placeholder="e.g., 3 Days"
+                                        as="textarea"
+                                        rows={5}
+                                        value={formData.included ? formData.included.join('\n') : ''}
+                                        onChange={(e) => setFormData({ ...formData, included: e.target.value.split('\n') })}
+                                        placeholder="Airport pickup&#13;&#10;Breakfast&#13;&#10;Tickets"
                                     />
                                 </Form.Group>
-                            </Col>
-                            <Col md={4}>
                                 <Form.Group className="mb-3">
-                                    <Form.Label>Rating</Form.Label>
+                                    <Form.Label>Gallery Images (One URL per line)</Form.Label>
                                     <Form.Control
-                                        type="number"
-                                        step="0.1"
-                                        min="0"
-                                        max="5"
-                                        value={formData.rating}
-                                        onChange={(e) => setFormData({ ...formData, rating: e.target.value })}
+                                        as="textarea"
+                                        rows={5}
+                                        value={formData.gallery ? formData.gallery.join('\n') : ''}
+                                        onChange={(e) => setFormData({ ...formData, gallery: e.target.value.split('\n') })}
+                                        placeholder="image1.jpg&#13;&#10;image2.jpg"
                                     />
                                 </Form.Group>
-                            </Col>
-                        </Row>
-                        <Form.Group className="mb-3">
-                            <Form.Label>Image URL</Form.Label>
-                            <Form.Control
-                                value={formData.image}
-                                onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                                placeholder="/path/to/image.jpg"
-                            />
-                        </Form.Group>
-                        <Form.Group className="mb-3">
-                            <Form.Label>Description</Form.Label>
-                            <Form.Control
-                                as="textarea"
-                                rows={4}
-                                value={formData.description}
-                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                            />
-                        </Form.Group>
+                            </Tab>
+
+                            <Tab eventKey="hotels" title="Hotels">
+                                <div className="alert alert-info small">
+                                    Enter hotels as a JSON structure. Example:
+                                    <pre>
+                                        {`[
+  {
+    "name": "Hotel Name",
+    "type": "Luxury",
+    "description": "Hotel description",
+    "image": "/path/to/image.jpg"
+  }
+]`}
+                                    </pre>
+                                </div>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Hotels JSON Data</Form.Label>
+                                    <Form.Control
+                                        as="textarea"
+                                        rows={10}
+                                        style={{ fontFamily: 'monospace', fontSize: '12px' }}
+                                        value={typeof formData.hotels === 'string' ? formData.hotels : JSON.stringify(formData.hotels, null, 2)}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setFormData({ ...formData, hotels: val });
+                                            try {
+                                                JSON.parse(val);
+                                                setJsonError(''); // Valid JSON
+                                            } catch (err) {
+                                                setJsonError('Invalid JSON format');
+                                            }
+                                        }}
+                                    />
+                                    {jsonError && <div className="text-danger small mt-1">{jsonError}</div>}
+                                </Form.Group>
+                            </Tab>
+                        </Tabs>
                     </Form>
                 </Modal.Body>
                 <Modal.Footer>

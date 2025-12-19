@@ -5,59 +5,107 @@ import AppNavbar from '../components/AppNavbar';
 import Footer from '../components/Footer';
 import { auth } from '../firebase';
 import { useApp } from '../context/AppContext';
+import { getAllPackages, getAllGuides, getApprovedReviews, addReview, getAllOffers, getSavedTrips, toggleSavedTrip } from '../services/firestoreService';
 
 const HomePage = () => {
     // Basic User Auth Check
-    const user = auth.currentUser;
-    const { formatPrice } = useApp(); // Get formatPrice for currency conversion
+    const { user, userProfile, loadingUser, formatPrice } = useApp(); // Use AppContext user
     const [searchTerm, setSearchTerm] = React.useState('');
     const [savedPackageIds, setSavedPackageIds] = React.useState([]);
     const [reviews, setReviews] = React.useState([]);
     const [newReview, setNewReview] = React.useState('');
-    const [selectedRating, setSelectedRating] = React.useState(0); // Star rating state
-    const [hoverRating, setHoverRating] = React.useState(0); // For hover effect
+    const [selectedRating, setSelectedRating] = React.useState(0);
+    const [hoverRating, setHoverRating] = React.useState(0);
     const packagesSectionRef = React.useRef(null);
 
-    React.useEffect(() => {
-        const loadSaved = () => {
-            const saved = JSON.parse(localStorage.getItem('savedTrips') || '[]');
-            setSavedPackageIds(saved);
-        };
+    // Data from Firestore
+    const [popularDestinations, setPopularDestinations] = React.useState([
+        { id: 1, name: 'Sigiriya', count: 'Loading...', image: '/sigiriya.png', icon: <FaLandmark /> },
+        { id: 2, name: 'Ella', count: 'Loading...', image: '/ella.png', icon: <FaMountain /> },
+        { id: 3, name: 'Mirissa', count: 'Loading...', image: '/beach.png', icon: <FaUmbrellaBeach /> },
+        { id: 4, name: 'Yala', count: 'Loading...', image: '/yala.jpg', icon: <FaTree /> },
+    ]);
+    const [packages, setPackages] = React.useState([]);
+    const [guides, setGuides] = React.useState([]);
+    const [offers, setOffers] = React.useState([]);
+    const [loading, setLoading] = React.useState(true);
 
-        // Load only approved reviews
-        const loadApprovedReviews = () => {
-            const allReviews = JSON.parse(localStorage.getItem('reviews') || '[]');
-            const approvedReviews = allReviews.filter(review => review.status === 'approved');
-            setReviews(approvedReviews);
+    React.useEffect(() => {
+        const loadData = async () => {
+            try {
+                const [packagesData, guidesData, reviewsData, offersData] = await Promise.all([
+                    getAllPackages(),
+                    getAllGuides(),
+                    getApprovedReviews(),
+                    getAllOffers()
+                ]);
+
+                setPackages(packagesData.slice(0, 4)); // Show top 4
+                setGuides(guidesData.slice(0, 6)); // Show top 6
+                setReviews(reviewsData.slice(0, 3)); // Show top 3 reviews
+
+                // Filter active offers
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+
+                const activeOffers = offersData.filter(o => {
+                    if (o.status !== 'active') return false;
+                    if (!o.validUntil) return true;
+                    // Create date from string to treat as local 00:00
+                    const validDate = new Date(o.validUntil);
+                    // Add 1 day to make it expire at the END of the selected day
+                    validDate.setDate(validDate.getDate() + 1);
+                    return validDate > new Date(); // Compare with current time
+                });
+                setOffers(activeOffers);
+
+                // Update Destination Counts
+                const newDestinations = [
+                    { id: 1, name: 'Sigiriya', count: `${packagesData.filter(p => p.location.toLowerCase().includes('sigiriya')).length} Packages`, image: '/sigiriya.png', icon: <FaLandmark /> },
+                    { id: 2, name: 'Ella', count: `${packagesData.filter(p => p.location.toLowerCase().includes('ella')).length} Packages`, image: '/ella.png', icon: <FaMountain /> },
+                    { id: 3, name: 'Mirissa', count: `${packagesData.filter(p => p.location.toLowerCase().includes('mirissa')).length} Packages`, image: '/beach.png', icon: <FaUmbrellaBeach /> },
+                    { id: 4, name: 'Yala', count: `${packagesData.filter(p => p.location.toLowerCase().includes('yala')).length} Packages`, image: '/yala.jpg', icon: <FaTree /> },
+                ];
+                setPopularDestinations(newDestinations);
+            } catch (error) {
+                console.error("Error loading home data", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadData();
+    }, []);
+
+    React.useEffect(() => {
+        const loadSaved = async () => {
+            if (user?.uid) {
+                const saved = await getSavedTrips(user.uid);
+                setSavedPackageIds(saved);
+            } else {
+                setSavedPackageIds([]);
+            }
         };
 
         loadSaved();
-        loadApprovedReviews();
+        // Still listen for local updates if needed, but primary is Firestore
+        window.addEventListener('local-storage-update', loadSaved);
+        return () => window.removeEventListener('local-storage-update', loadSaved);
+    }, [user]);
 
-        const handleStorageChange = () => {
-            loadSaved();
-            loadApprovedReviews();
-        };
-
-        window.addEventListener('storage', handleStorageChange);
-        window.addEventListener('local-storage-update', handleStorageChange);
-
-        return () => {
-            window.removeEventListener('storage', handleStorageChange);
-            window.removeEventListener('local-storage-update', handleStorageChange);
-        };
-    }, []);
-
-    const toggleSave = (id) => {
-        let newSaved;
-        if (savedPackageIds.includes(id)) {
-            newSaved = savedPackageIds.filter(pid => pid !== id);
-        } else {
-            newSaved = [...savedPackageIds, id];
+    const toggleSave = async (id) => {
+        if (!user) {
+            alert("Please login to save your favorite trips!");
+            navigate('/login');
+            return;
         }
-        setSavedPackageIds(newSaved);
-        localStorage.setItem('savedTrips', JSON.stringify(newSaved));
-        window.dispatchEvent(new Event('local-storage-update'));
+
+        try {
+            const newSaved = await toggleSavedTrip(user.uid, id);
+            setSavedPackageIds(newSaved);
+            window.dispatchEvent(new Event('local-storage-update'));
+        } catch (error) {
+            console.error("Error toggling save:", error);
+        }
     };
 
     const handleDestinationClick = (name) => {
@@ -67,69 +115,48 @@ const HomePage = () => {
         }
     };
 
-    const handleReviewSubmit = (e) => {
+    const handleReviewSubmit = async (e) => {
         e.preventDefault();
 
-        // Validate rating
         if (selectedRating === 0) {
             alert('Please select a star rating before submitting your review.');
             return;
         }
 
+        if (!user) {
+            alert('You must be logged in to submit a review.');
+            return;
+        }
+
         if (newReview.trim()) {
-            // Get existing reviews from localStorage
-            const existingReviews = JSON.parse(localStorage.getItem('reviews') || '[]');
+            try {
+                const reviewData = {
+                    userName: userProfile?.name || user?.displayName || user?.email?.split('@')[0] || 'Anonymous',
+                    userEmail: user?.email || '',
+                    userPhoto: userProfile?.photoURL || user?.photoURL || '',
+                    packageName: 'General Site Review',
+                    packageId: null,
+                    name: userProfile?.name || user?.displayName || user?.email?.split('@')[0] || 'Anonymous',
+                    country: 'Global Traveler',
+                    comment: newReview,
+                    rating: selectedRating
+                };
 
-            const review = {
-                id: Date.now(),
-                userName: user.displayName || user.email?.split('@')[0] || 'Anonymous',
-                userEmail: user.email || '',
-                packageName: 'General Review', // Can be customized per package
-                packageId: null,
-                name: user.displayName || user.email?.split('@')[0] || 'Anonymous',
-                country: 'Global Traveler',
-                comment: newReview,
-                rating: selectedRating, // Use selected rating instead of hardcoded 5
-                date: new Date().toISOString(),
-                status: 'pending' // All new reviews are pending by default
-            };
+                await addReview(reviewData);
 
-            // Save to localStorage for admin review
-            const updatedReviews = [review, ...existingReviews];
-            localStorage.setItem('reviews', JSON.stringify(updatedReviews));
-
-            // Reset form
-            setNewReview('');
-            setSelectedRating(0);
-            setHoverRating(0);
-            alert('Thank you for your review! It will be published after admin approval.');
+                setNewReview('');
+                setSelectedRating(0);
+                setHoverRating(0);
+                alert('Thank you for your review! It will be published after admin approval.');
+            } catch (error) {
+                console.error("Error submitting review", error);
+                alert("Failed to submit review. Please try again.");
+            }
         }
     };
 
-    // Mock Data
-    const popularDestinations = [
-        { id: 1, name: 'Sigiriya', count: '15 Packages', image: '/sigiriya.png', icon: <FaLandmark /> },
-        { id: 2, name: 'Ella', count: '12 Packages', image: '/ella.png', icon: <FaMountain /> },
-        { id: 3, name: 'Mirissa', count: '8 Packages', image: '/beach.png', icon: <FaUmbrellaBeach /> },
-        { id: 4, name: 'Yala', count: '10 Packages', image: '/yala.jpg', icon: <FaTree /> },
-    ];
-
-    // Prices stored as numbers in LKR for proper conversion
-    const packages = [
-        { id: 1, title: 'Sigiriya Adventure', location: 'Sigiriya, Sri Lanka', price: 45000, duration: '3 Days', image: '/sigiriya.png', rating: 4.8 },
-        { id: 2, title: 'Ella Hill Climb', location: 'Ella, Sri Lanka', price: 35000, duration: '2 Days', image: '/ella.png', rating: 4.9 },
-        { id: 3, title: 'Coastal Bliss', location: 'Mirissa, Sri Lanka', price: 60000, duration: '4 Days', image: '/beach.png', rating: 4.7 },
-        { id: 4, title: 'Cultural Triangle', location: 'Kandy, Sri Lanka', price: 55000, duration: '3 Days', image: '/kandy.jpg', rating: 4.6 },
-    ];
-
-    const guides = [
-        { id: 1, name: 'Saman Perera', role: 'Cultural Expert', image: 'https://randomuser.me/api/portraits/men/32.jpg', rating: 4.9 },
-        { id: 2, name: 'Nimali Silva', role: 'Wildlife Guide', image: 'https://randomuser.me/api/portraits/women/44.jpg', rating: 4.8 },
-        { id: 3, name: 'Kumar Sangak', role: 'Adventure Lead', image: 'https://randomuser.me/api/portraits/men/22.jpg', rating: 5.0 },
-        { id: 4, name: 'Dinesh Chandimal', role: 'Historian', image: 'https://randomuser.me/api/portraits/men/15.jpg', rating: 4.7 },
-        { id: 5, name: 'Chathurika', role: 'Eco-Tourism', image: 'https://randomuser.me/api/portraits/women/65.jpg', rating: 4.9 },
-        { id: 6, name: 'Roshan Mahanama', role: 'Food Tour Guide', image: 'https://randomuser.me/api/portraits/men/50.jpg', rating: 4.8 },
-    ];
+    // Destinations are now dynamic
+    // Packages and Guides are now fetched from Firestore
 
     const filteredPackages = packages.filter(pkg =>
         pkg.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -181,7 +208,10 @@ const HomePage = () => {
                         </Col>
                     </Row>
                 </Container>
+
             </div>
+
+
 
             {/* Why Choose Us Section */}
             <section className="py-5">
@@ -339,6 +369,49 @@ const HomePage = () => {
                 </Container>
             </section>
 
+            {/* Exclusive Offers Section */}
+            {
+                offers.length > 0 && (
+                    <section className="py-5 bg-white">
+                        <Container>
+                            <div className="text-center mb-4">
+                                <Badge bg="danger" className="mb-2">Limited Time Deals</Badge>
+                                <h2 className="fw-bold">Exclusive Offers</h2>
+                            </div>
+                            <Row className="justify-content-center">
+                                {offers.map(offer => (
+                                    <Col md={6} lg={4} key={offer.id} className="mb-4">
+                                        <div className="d-flex align-items-center bg-light rounded-4 p-4 shadow-sm border border-danger position-relative overflow-hidden h-100">
+                                            {/* Decorative background circle */}
+                                            <div className="position-absolute rounded-circle bg-danger opacity-10" style={{ top: '-20px', right: '-20px', width: '100px', height: '100px' }}></div>
+
+                                            <div className="flex-grow-1 position-relative z-1">
+                                                <h4 className="fw-bold text-danger mb-1">{offer.title}</h4>
+                                                <h3 className="fw-bold mb-2">{offer.discount}</h3>
+                                                <p className="text-muted small mb-3">{offer.description}</p>
+                                                {offer.code && (
+                                                    <div className="d-inline-block bg-white border border-danger border-dashed px-3 py-1 rounded fw-bold text-danger">
+                                                        Use Code: {offer.code}
+                                                    </div>
+                                                )}
+                                                {offer.validUntil && (
+                                                    <div className="mt-2 text-secondary small">
+                                                        Expires: {new Date(offer.validUntil).toLocaleDateString()}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="flex-shrink-0 ms-3">
+                                                <FaTags size={40} className="text-danger opacity-50" />
+                                            </div>
+                                        </div>
+                                    </Col>
+                                ))}
+                            </Row>
+                        </Container>
+                    </section>
+                )
+            }
+
             {/* Reviews Section */}
             <section className="py-5">
                 <Container>
@@ -352,7 +425,13 @@ const HomePage = () => {
                                     </div>
                                     <p className="text-secondary italic mb-4">"{review.comment}"</p>
                                     <div className="d-flex align-items-center mt-auto">
-                                        <div className="bg-secondary rounded-circle" style={{ width: '40px', height: '40px' }}></div>
+                                        {review.userPhoto ? (
+                                            <img src={review.userPhoto} alt={review.name} className="rounded-circle shadow-sm" style={{ width: '40px', height: '40px', objectFit: 'cover' }} />
+                                        ) : (
+                                            <div className="bg-secondary rounded-circle d-flex align-items-center justify-content-center text-white" style={{ width: '40px', height: '40px' }}>
+                                                {review.name.charAt(0)}
+                                            </div>
+                                        )}
                                         <div className="ms-3">
                                             <h6 className="fw-bold mb-0 small">{review.name}</h6>
                                             <p className="text-muted small mb-0">From {review.country}</p>
@@ -422,7 +501,7 @@ const HomePage = () => {
             </section>
 
             <Footer />
-        </div>
+        </div >
     );
 };
 

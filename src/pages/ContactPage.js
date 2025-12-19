@@ -5,6 +5,8 @@ import AppNavbar from '../components/AppNavbar';
 import Footer from '../components/Footer';
 import { auth } from '../firebase';
 
+import { submitContact } from '../services/firestoreService';
+
 const ContactPage = () => {
     const user = auth.currentUser;
 
@@ -25,34 +27,35 @@ const ContactPage = () => {
         });
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
 
-        // Save to localStorage (in production, this would be sent to a server)
-        const contactMessages = JSON.parse(localStorage.getItem('contactMessages') || '[]');
-        const newMessage = {
-            ...formData,
-            id: Date.now(),
-            timestamp: new Date().toISOString(),
-            status: 'pending'
-        };
-        contactMessages.push(newMessage);
-        localStorage.setItem('contactMessages', JSON.stringify(contactMessages));
+        try {
+            // Save to Firestore
+            await submitContact({
+                ...formData,
+                phone: formData.phone || '', // Ensure optional fields are handled
+                createdAt: new Date().toISOString()
+            });
 
-        // Show success message
-        setSubmitted(true);
+            // Show success message
+            setSubmitted(true);
 
-        // Reset form
-        setFormData({
-            name: '',
-            email: '',
-            phone: '',
-            subject: '',
-            message: ''
-        });
+            // Reset form
+            setFormData({
+                name: '',
+                email: '',
+                phone: '',
+                subject: '',
+                message: ''
+            });
 
-        // Hide success message after 5 seconds
-        setTimeout(() => setSubmitted(false), 5000);
+            // Hide success message after 5 seconds
+            setTimeout(() => setSubmitted(false), 5000);
+        } catch (error) {
+            console.error("Error submitting contact form", error);
+            alert("Failed to send message. Please try again.");
+        }
     };
 
     return (

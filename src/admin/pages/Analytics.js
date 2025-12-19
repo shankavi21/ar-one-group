@@ -3,18 +3,20 @@ import { Row, Col, Card, Table, Badge, Button } from 'react-bootstrap';
 import { FaDownload, FaUsers, FaBox, FaCalendarCheck, FaDollarSign, FaStar, FaArrowUp } from 'react-icons/fa';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
+import { getAllBookings, getAllPackages, getAllReviews } from '../../services/firestoreService';
+
 const Analytics = () => {
     const [analytics, setAnalytics] = useState({
         totalRevenue: 0,
         totalBookings: 0,
         totalUsers: 0,
-        activePackages: 8,
-        avgRating: 4.7,
-        conversionRate: 12.5
+        activePackages: 0,
+        avgRating: 0,
+        conversionRate: 0
     });
 
     const [monthlyData, setMonthlyData] = useState([]);
-    const [packageData, setPackageData] = useState([]);
+    const [packageData, setPackageData] = useState([]); // This is actually statusData in the chart render
     const [revenueData, setRevenueData] = useState([]);
     const [topPackages, setTopPackages] = useState([]);
     const [recentActivity, setRecentActivity] = useState([]);
@@ -23,68 +25,124 @@ const Analytics = () => {
         loadAnalytics();
     }, []);
 
-    const loadAnalytics = () => {
-        // Load bookings
-        const bookings = JSON.parse(localStorage.getItem('userBookings') || '[]');
-        const totalRevenue = bookings.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
-        const totalBookings = bookings.length;
+    const loadAnalytics = async () => {
+        try {
+            const [bookings, packages, reviews] = await Promise.all([
+                getAllBookings(),
+                getAllPackages(),
+                getAllReviews()
+            ]);
 
-        // Generate monthly booking data (last 6 months)
-        const months = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const monthlyBookings = months.map((month, idx) => ({
-            month,
-            bookings: Math.floor(Math.random() * 20) + 5,
-            revenue: Math.floor(Math.random() * 500000) + 100000
-        }));
+            // 1. Key Metrics
+            const totalBookings = bookings.length;
+            const totalRevenue = bookings.reduce((sum, b) => sum + (Number(b.totalAmount) || 0), 0);
+            const activePackages = packages.length;
 
-        // Revenue trend data
-        const revenueTrend = months.map((month, idx) => ({
-            month,
-            revenue: Math.floor(Math.random() * 600000) + 200000,
-            target: 400000
-        }));
+            // Calculate Average Rating from Reviews
+            const totalRating = reviews.reduce((sum, r) => sum + (Number(r.rating) || 0), 0);
+            const avgRating = reviews.length > 0 ? (totalRating / reviews.length).toFixed(1) : 0;
 
-        // Package popularity (mock data)
-        const packages = [
-            { name: 'Sigiriya', bookings: 45, revenue: 2025000 },
-            { name: 'Ella', bookings: 38, revenue: 1330000 },
-            { name: 'Yala Safari', bookings: 32, revenue: 1280000 },
-            { name: 'Coastal Bliss', bookings: 28, revenue: 1680000 },
-            { name: 'Kandy', bookings: 25, revenue: 1375000 },
-            { name: 'Galle Fort', bookings: 22, revenue: 660000 },
-        ];
+            // 2. Monthly Data (Bookings & Revenue)
+            const monthMap = {};
+            const last6Months = [];
+            for (let i = 5; i >= 0; i--) {
+                const d = new Date();
+                d.setMonth(d.getMonth() - i);
+                const key = `${d.toLocaleString('default', { month: 'short' })}`;
+                last6Months.push(key);
+                monthMap[key] = { bookings: 0, revenue: 0 };
+            }
 
-        // Booking status distribution
-        const statusData = [
-            { name: 'Confirmed', value: bookings.filter(b => b.status === 'confirmed').length || 15 },
-            { name: 'Pending', value: bookings.filter(b => b.status === 'pending').length || 5 },
-            { name: 'Completed', value: bookings.filter(b => b.status === 'completed').length || 8 },
-            { name: 'Cancelled', value: bookings.filter(b => b.status === 'cancelled').length || 2 }
-        ];
+            bookings.forEach(booking => {
+                const date = booking.createdAt ? (booking.createdAt.toDate ? booking.createdAt.toDate() : new Date(booking.createdAt)) : new Date();
+                const key = date.toLocaleString('default', { month: 'short' });
+                if (monthMap[key]) {
+                    monthMap[key].bookings += 1;
+                    monthMap[key].revenue += (Number(booking.totalAmount) || 0);
+                }
+            });
 
-        // Recent activity
-        const activities = [
-            { type: 'booking', user: 'John Doe', action: 'New booking for Sigiriya Adventure', time: '2 hours ago' },
-            { type: 'review', user: 'Sarah Wilson', action: 'Left 5-star review for Ella Hill Climb', time: '5 hours ago' },
-            { type: 'contact', user: 'Mike Johnson', action: 'Sent inquiry about Yala Safari', time: '1 day ago' },
-            { type: 'booking', user: 'Emma Brown', action: 'Confirmed booking for Coastal Bliss', time: '1 day ago' },
-            { type: 'review', user: 'David Lee', action: 'Left review for guide Saman Perera', time: '2 days ago' }
-        ];
+            const monthlyChartData = last6Months.map(month => ({
+                month,
+                bookings: monthMap[month].bookings,
+                revenue: monthMap[month].revenue
+            }));
 
-        setAnalytics({
-            totalRevenue,
-            totalBookings,
-            totalUsers: 0,
-            activePackages: 8,
-            avgRating: 4.7,
-            conversionRate: 12.5
-        });
+            // 3. Revenue Trend (Same as monthly but dedicated chart structure)
+            const revenueTrendData = monthlyChartData.map(d => ({
+                month: d.month,
+                revenue: d.revenue,
+                target: (totalRevenue / 6) * 1.1 // Mock target as 10% more than avg
+            }));
 
-        setMonthlyData(monthlyBookings);
-        setRevenueData(revenueTrend);
-        setPackageData(statusData);
-        setTopPackages(packages);
-        setRecentActivity(activities);
+            // 4. Booking Status Distribution
+            const statusCounts = {};
+            bookings.forEach(b => {
+                const status = b.status || 'pending';
+                statusCounts[status] = (statusCounts[status] || 0) + 1;
+            });
+            const statusChartData = Object.keys(statusCounts).map(status => ({
+                name: status.charAt(0).toUpperCase() + status.slice(1),
+                value: statusCounts[status]
+            }));
+
+            // 5. Top Packages
+            const packagePerformance = {};
+            bookings.forEach(b => {
+                if (b.packageTitle) {
+                    if (!packagePerformance[b.packageTitle]) {
+                        packagePerformance[b.packageTitle] = { bookings: 0, revenue: 0 };
+                    }
+                    packagePerformance[b.packageTitle].bookings += 1;
+                    packagePerformance[b.packageTitle].revenue += (Number(b.totalAmount) || 0);
+                }
+            });
+            const topOps = Object.entries(packagePerformance)
+                .map(([name, data]) => ({ name, ...data }))
+                .sort((a, b) => b.bookings - a.bookings)
+                .slice(0, 5);
+
+            // 6. Recent Activity (Mix of Bookings and Reviews)
+            const recentItems = [
+                ...bookings.map(b => ({
+                    type: 'booking',
+                    user: b.customerName || 'Guest',
+                    action: `Booked ${b.packageTitle}`,
+                    date: b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt)) : new Date()
+                })),
+                ...reviews.map(r => ({
+                    type: 'review',
+                    user: r.userName || 'User',
+                    action: `Rated ${r.packageName} (${r.rating}⭐)`,
+                    date: r.createdAt ? (r.createdAt.toDate ? r.createdAt.toDate() : new Date(r.createdAt)) : new Date()
+                }))
+            ];
+            const sortedActivity = recentItems
+                .sort((a, b) => b.date - a.date)
+                .slice(0, 5)
+                .map(item => ({
+                    ...item,
+                    time: item.date.toLocaleDateString()
+                }));
+
+            setAnalytics({
+                totalRevenue,
+                totalBookings,
+                totalUsers: 0, // Placeholder
+                activePackages,
+                avgRating,
+                conversionRate: ((totalBookings / (bookings.length + 20)) * 100).toFixed(1) // Mock calc
+            });
+
+            setMonthlyData(monthlyChartData);
+            setRevenueData(revenueTrendData);
+            setPackageData(statusChartData);
+            setTopPackages(topOps);
+            setRecentActivity(sortedActivity);
+
+        } catch (error) {
+            console.error("Error loading analytics:", error);
+        }
     };
 
     const COLORS = ['#0891b2', '#f59e0b', '#10b981', '#ef4444'];

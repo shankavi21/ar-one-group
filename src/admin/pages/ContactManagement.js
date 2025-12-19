@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Card, Table, Button, Badge, Modal, Form } from 'react-bootstrap';
 import { FaEnvelope, FaCheck, FaTrash, FaEye } from 'react-icons/fa';
 
+import { getAllContacts, updateContactStatus, deleteContact } from '../../services/firestoreService';
+
 const ContactManagement = () => {
     const [contacts, setContacts] = useState([]);
     const [showModal, setShowModal] = useState(false);
@@ -11,22 +13,32 @@ const ContactManagement = () => {
         loadContacts();
     }, []);
 
-    const loadContacts = () => {
-        const savedContacts = JSON.parse(localStorage.getItem('contactMessages') || '[]');
-        setContacts(savedContacts);
+    const loadContacts = async () => {
+        try {
+            const data = await getAllContacts();
+            setContacts(data);
+        } catch (error) {
+            console.error("Failed to load contacts", error);
+        }
     };
 
-    const handleMarkResolved = (id) => {
-        const updated = contacts.map(c => c.id === id ? { ...c, status: 'resolved' } : c);
-        setContacts(updated);
-        localStorage.setItem('contactMessages', JSON.stringify(updated));
+    const handleMarkResolved = async (id) => {
+        try {
+            await updateContactStatus(id, 'resolved');
+            loadContacts();
+        } catch (error) {
+            console.error("Error updating status", error);
+        }
     };
 
-    const handleDelete = (id) => {
+    const handleDelete = async (id) => {
         if (window.confirm('Delete this message?')) {
-            const updated = contacts.filter(c => c.id !== id);
-            setContacts(updated);
-            localStorage.setItem('contactMessages', JSON.stringify(updated));
+            try {
+                await deleteContact(id);
+                loadContacts();
+            } catch (error) {
+                console.error("Error deleting contact", error);
+            }
         }
     };
 

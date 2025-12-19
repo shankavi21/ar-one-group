@@ -3,12 +3,15 @@ import { Row, Col, Card, Table, Badge } from 'react-bootstrap';
 import { FaUsers, FaBox, FaCalendarCheck, FaEnvelope, FaUserTie, FaDollarSign } from 'react-icons/fa';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
+import { getAllUsers, getAllBookings, getAllPackages, getAllGuides, getAllContacts } from '../../services/firestoreService';
+import { seedDatabase } from '../../utils/seeder';
+
 const AdminDashboard = () => {
     const [stats, setStats] = useState({
         totalUsers: 0,
         totalBookings: 0,
-        totalPackages: 8,
-        totalGuides: 5,
+        totalPackages: 0,
+        totalGuides: 0,
         pendingContacts: 0,
         totalRevenue: 0
     });
@@ -16,62 +19,97 @@ const AdminDashboard = () => {
     const [recentBookings, setRecentBookings] = useState([]);
     const [bookingsByMonth, setBookingsByMonth] = useState([]);
     const [bookingsByStatus, setBookingsByStatus] = useState([]);
+    const [seeding, setSeeding] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         loadDashboardData();
     }, []);
 
-    const loadDashboardData = () => {
-        // Load bookings from localStorage
-        const bookings = JSON.parse(localStorage.getItem('userBookings') || '[]');
+    const handleSeed = async () => {
+        if (!window.confirm("This will populate the database with sample packages and guides if it's empty. Continue?")) return;
 
-        // Load contact messages
-        const contacts = JSON.parse(localStorage.getItem('contactMessages') || '[]');
-        const pendingContacts = contacts.filter(c => c.status === 'pending').length;
+        setSeeding(true);
+        try {
+            const result = await seedDatabase();
+            if (result.success) {
+                alert("✅ " + result.message);
+                loadDashboardData();
+            } else {
+                alert("ℹ️ " + result.message);
+            }
+        } catch (error) {
+            alert("❌ Error seeding database: " + error.message);
+        } finally {
+            setSeeding(false);
+        }
+    };
 
-        // Calculate total revenue
-        const totalRevenue = bookings.reduce((sum, booking) => sum + (booking.totalAmount || 0), 0);
+    const loadDashboardData = async () => {
+        setLoading(true);
+        try {
+            const [users, bookings, packages, guides, contacts] = await Promise.all([
+                getAllUsers(),
+                getAllBookings(),
+                getAllPackages(),
+                getAllGuides(),
+                getAllContacts()
+            ]);
 
-        // Get recent bookings (last 5)
-        const recent = bookings.slice(0, 5);
+            // Calculate Stats
+            const totalUsers = users.length;
+            const totalBookings = bookings.length;
+            const totalPackages = packages.length; // Count all or filter by status if needed
+            const totalGuides = guides.length;
+            const pendingContacts = contacts.filter(c => c.status === 'pending').length;
+            const totalRevenue = bookings.reduce((sum, booking) => sum + (Number(booking.totalAmount) || 0), 0);
 
-        // Calculate bookings by month
-        const monthData = {};
-        bookings.forEach(booking => {
-            const date = new Date(booking.bookingDate);
-            const monthYear = `${date.getMonth() + 1}/${date.getFullYear()}`;
-            monthData[monthYear] = (monthData[monthYear] || 0) + 1;
-        });
+            // Recent Bookings (already sorted by desc in service usually, but ensure limit)
+            const recent = bookings.slice(0, 5);
 
-        const monthChartData = Object.entries(monthData).map(([month, count]) => ({
-            month,
-            bookings: count
-        }));
+            // Bookings by Month
+            const monthData = {};
+            bookings.forEach(booking => {
+                const dateVal = booking.createdAt ? (booking.createdAt.toDate ? booking.createdAt.toDate() : new Date(booking.createdAt)) : new Date();
+                const monthYear = `${dateVal.getMonth() + 1}/${dateVal.getFullYear()}`;
+                monthData[monthYear] = (monthData[monthYear] || 0) + 1;
+            });
 
-        // Calculate bookings by status
-        const statusData = {};
-        bookings.forEach(booking => {
-            const status = booking.status || 'confirmed';
-            statusData[status] = (statusData[status] || 0) + 1;
-        });
+            const monthChartData = Object.entries(monthData).map(([month, count]) => ({
+                month,
+                bookings: count
+            }));
 
-        const statusChartData = Object.entries(statusData).map(([status, count]) => ({
-            status,
-            value: count
-        }));
+            // Bookings by Status
+            const statusData = {};
+            bookings.forEach(booking => {
+                const status = booking.status || 'pending';
+                statusData[status] = (statusData[status] || 0) + 1;
+            });
 
-        setStats({
-            totalUsers: 0, // You can integrate with Firebase Auth to get real user count
-            totalBookings: bookings.length,
-            totalPackages: 8,
-            totalGuides: 5,
-            pendingContacts,
-            totalRevenue
-        });
+            const statusChartData = Object.entries(statusData).map(([status, count]) => ({
+                status,
+                value: count
+            }));
 
-        setRecentBookings(recent);
-        setBookingsByMonth(monthChartData);
-        setBookingsByStatus(statusChartData);
+            setStats({
+                totalUsers,
+                totalBookings,
+                totalPackages,
+                totalGuides,
+                pendingContacts,
+                totalRevenue
+            });
+
+            setRecentBookings(recent);
+            setBookingsByMonth(monthChartData);
+            setBookingsByStatus(statusChartData);
+
+        } catch (error) {
+            console.error("Error loading dashboard data:", error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const COLORS = ['#0891b2', '#f59e0b', '#10b981', '#ef4444'];
@@ -108,7 +146,16 @@ const AdminDashboard = () => {
 
     return (
         <div>
-            <h2 className="fw-bold mb-4">Dashboard Overview</h2>
+            <div className="d-flex justify-content-between align-items-center mb-4">
+                <h2 className="fw-bold mb-0">Dashboard Overview</h2>
+                <button
+                    className="btn btn-outline-primary rounded-pill px-4"
+                    onClick={handleSeed}
+                    disabled={seeding}
+                >
+                    {seeding ? 'Seeding...' : 'Initialize Sample Data'}
+                </button>
+            </div>
 
             {/* Stats Cards */}
             <Row className="mb-4">

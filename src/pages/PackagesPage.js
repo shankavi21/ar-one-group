@@ -7,59 +7,62 @@ import Footer from '../components/Footer';
 import { auth } from '../firebase';
 import { useApp } from '../context/AppContext';
 
+import { getAllPackages, getSavedTrips, toggleSavedTrip } from '../services/firestoreService';
+
 const PackagesPage = () => {
-    const user = auth.currentUser;
-    const { formatPrice } = useApp(); // Get formatPrice for currency conversion
+    const { user, formatPrice } = useApp(); // Get context data
     const [searchParams] = useSearchParams(); // Get params
     const [searchTerm, setSearchTerm] = useState('');
     const [savedPackageIds, setSavedPackageIds] = useState([]);
+    const [packages, setPackages] = useState([]);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const query = searchParams.get('search');
-        if (query) {
-            setSearchTerm(query);
+        const fetchPackages = async () => {
+            try {
+                const data = await getAllPackages();
+                setPackages(data);
+            } catch (error) {
+                console.error("Error loading packages", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchPackages();
+
+        const queryValue = searchParams.get('search');
+        if (queryValue) {
+            setSearchTerm(queryValue);
         }
 
-        // Load saved trips
-        const loadSaved = () => {
-            const saved = JSON.parse(localStorage.getItem('savedTrips') || '[]');
-            setSavedPackageIds(saved);
+        // Load saved trips from Firestore
+        const loadSaved = async () => {
+            if (user?.uid) {
+                const saved = await getSavedTrips(user.uid);
+                setSavedPackageIds(saved);
+            } else {
+                setSavedPackageIds([]);
+            }
         };
         loadSaved();
 
-        const handleStorageChange = () => loadSaved();
-        window.addEventListener('storage', handleStorageChange);
-        window.addEventListener('local-storage-update', handleStorageChange);
+        window.addEventListener('local-storage-update', loadSaved);
+        return () => window.removeEventListener('local-storage-update', loadSaved);
+    }, [searchParams, user]);
 
-        return () => {
-            window.removeEventListener('storage', handleStorageChange);
-            window.removeEventListener('local-storage-update', handleStorageChange);
-        };
-    }, [searchParams]);
-
-    const toggleSave = (id) => {
-        let newSaved;
-        if (savedPackageIds.includes(id)) {
-            newSaved = savedPackageIds.filter(pid => pid !== id);
-        } else {
-            newSaved = [...savedPackageIds, id];
+    const toggleSave = async (id) => {
+        if (!user) {
+            alert("Please login to save packages!");
+            return;
         }
-        setSavedPackageIds(newSaved);
-        localStorage.setItem('savedTrips', JSON.stringify(newSaved));
-        window.dispatchEvent(new Event('local-storage-update'));
+        try {
+            const newSaved = await toggleSavedTrip(user.uid, id);
+            setSavedPackageIds(newSaved);
+            window.dispatchEvent(new Event('local-storage-update'));
+        } catch (error) {
+            console.error("Error toggling save:", error);
+        }
     };
-
-    // Prices stored as numbers in LKR for proper conversion
-    const packages = [
-        { id: 1, title: 'Sigiriya Adventure', location: 'Sigiriya, Sri Lanka', price: 45000, duration: '3 Days', image: '/sigiriya.png', rating: 4.8 },
-        { id: 2, title: 'Ella Hill Climb', location: 'Ella, Sri Lanka', price: 35000, duration: '2 Days', image: '/ella.png', rating: 4.9 },
-        { id: 3, title: 'Coastal Bliss', location: 'Mirissa, Sri Lanka', price: 60000, duration: '4 Days', image: '/beach.png', rating: 4.7 },
-        { id: 4, title: 'Cultural Triangle', location: 'Kandy, Sri Lanka', price: 55000, duration: '3 Days', image: '/kandy.jpg', rating: 4.6 },
-        { id: 5, title: 'Wild Yala Safari', location: 'Yala, Sri Lanka', price: 40000, duration: '2 Days', image: '/yala.jpg', rating: 4.8 },
-        { id: 6, title: 'Historic Galle Fort', location: 'Galle, Sri Lanka', price: 30000, duration: '1 Day', image: '/galle.jpg', rating: 4.9 },
-        { id: 7, title: 'Knuckles Trek', location: 'Matale, Sri Lanka', price: 50000, duration: '3 Days', image: '/knuckles.jpg', rating: 4.7 },
-        { id: 8, title: 'Jaffna Discovery', location: 'Jaffna, Sri Lanka', price: 65000, duration: '4 Days', image: '/jaffna.jpg', rating: 4.5 },
-    ];
 
     const filteredPackages = packages.filter(pkg =>
         pkg.title.toLowerCase().includes(searchTerm.toLowerCase()) ||

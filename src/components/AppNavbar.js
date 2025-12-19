@@ -4,21 +4,31 @@ import { Link, useNavigate } from 'react-router-dom';
 import { FaUserCircle } from 'react-icons/fa';
 import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
+import { useState, useEffect } from 'react';
+import { useApp } from '../context/AppContext';
 
 const AppNavbar = ({ transparent = false, user = null }) => {
     const navigate = useNavigate();
 
-    // Get custom user data from localStorage
-    const customDisplayName = localStorage.getItem('userDisplayName');
-    const customPhotoURL = localStorage.getItem('userPhotoURL');
+    const { userProfile } = useApp();
 
-    // Use custom data if available, otherwise fall back to Firebase user data
-    const displayName = customDisplayName || user?.displayName || 'User';
-    const photoURL = customPhotoURL || user?.photoURL;
+    // Use derive values instead of state to avoid synchronization issues (Scoped to UID)
+    const displayName = user?.uid ? (localStorage.getItem(`userDisplayName_${user.uid}`) || userProfile?.name || user?.displayName || 'User') : 'User';
+    const photoURL = user?.uid ? (localStorage.getItem(`userPhotoURL_${user.uid}`) || userProfile?.photoURL || user?.photoURL) : null;
+
+    // Force re-render when localStorage changes
+    const [, setTick] = useState(0);
+    useEffect(() => {
+        const handleStorageUpdate = () => setTick(t => t + 1);
+        window.addEventListener('local-storage-update', handleStorageUpdate);
+        return () => window.removeEventListener('local-storage-update', handleStorageUpdate);
+    }, []);
 
     const handleLogout = async () => {
         try {
             await signOut(auth);
+            // Clear ALL local storage for safety on logout
+            localStorage.clear();
             navigate('/login');
         } catch (error) {
             console.error("Error logging out:", error);
@@ -43,7 +53,7 @@ const AppNavbar = ({ transparent = false, user = null }) => {
                             </Nav>
                             <Nav className="align-items-center gap-3">
                                 <div className="d-flex align-items-center text-white">
-                                    <span className="me-2 d-none d-lg-block">Welcome, {displayName}</span>
+                                    <span className="me-2 d-none d-lg-block">Welcome {displayName}</span>
                                     <Dropdown align="end">
                                         <Dropdown.Toggle variant="link" className="p-0 text-white border-0 shadow-none" id="dropdown-user">
                                             {photoURL ? (

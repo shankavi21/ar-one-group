@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Card, Table, Button, Badge, Modal, Form, Row, Col } from 'react-bootstrap';
 import { FaStar, FaCheck, FaTimes, FaTrash, FaEye, FaEdit } from 'react-icons/fa';
 
+import { getAllReviews, updateReviewStatus, deleteReview, updateReview } from '../../services/firestoreService';
+
 const ReviewManagement = () => {
     const [reviews, setReviews] = useState([]);
     const [filterStatus, setFilterStatus] = useState('all');
@@ -14,100 +16,50 @@ const ReviewManagement = () => {
         loadReviews();
     }, []);
 
-    const loadReviews = () => {
-        // Load reviews from localStorage or use default data
-        const savedReviews = localStorage.getItem('reviews');
-        const reviewsData = savedReviews ? JSON.parse(savedReviews) : [
-            {
-                id: 1,
-                userName: 'John Doe',
-                userEmail: 'john@example.com',
-                packageName: 'Sigiriya Adventure',
-                packageId: 1,
-                rating: 5,
-                comment: 'Absolutely amazing experience! The guide was knowledgeable and the itinerary was perfect. Highly recommended!',
-                date: new Date().toISOString(),
-                status: 'approved'
-            },
-            {
-                id: 2,
-                userName: 'Sarah Williams',
-                userEmail: 'sarah@example.com',
-                packageName: 'Ella Hill Climb',
-                packageId: 2,
-                rating: 4,
-                comment: 'Great trek with stunning views. The guide was helpful but we wished for more time at the summit.',
-                date: new Date(Date.now() - 86400000).toISOString(),
-                status: 'approved'
-            },
-            {
-                id: 3,
-                userName: 'Mike Johnson',
-                userEmail: 'mike@example.com',
-                packageName: 'Wild Yala Safari',
-                packageId: 5,
-                rating: 5,
-                comment: 'Saw 2 leopards! Incredible wildlife experience. Our guide knew exactly where to find animals.',
-                date: new Date(Date.now() - 172800000).toISOString(),
-                status: 'pending'
-            },
-            {
-                id: 4,
-                userName: 'Emma Brown',
-                userEmail: 'emma@example.com',
-                packageName: 'Coastal Bliss',
-                packageId: 3,
-                rating: 3,
-                comment: 'Beach was nice but hotel room was not as advertised. Food quality needs improvement.',
-                date: new Date(Date.now() - 259200000).toISOString(),
-                status: 'pending'
-            },
-            {
-                id: 5,
-                userName: 'David Lee',
-                userEmail: 'david@example.com',
-                guideName: 'Saman Perera',
-                guideId: 1,
-                rating: 5,
-                comment: 'Saman is an outstanding guide! His knowledge of Sri Lankan history is impressive. Made our trip memorable.',
-                date: new Date(Date.now() - 345600000).toISOString(),
-                status: 'approved'
-            }
-        ];
-        setReviews(reviewsData);
-        localStorage.setItem('reviews', JSON.stringify(reviewsData));
-    };
-
-    const handleStatusChange = (reviewId, newStatus) => {
-        const updatedReviews = reviews.map(review =>
-            review.id === reviewId ? { ...review, status: newStatus } : review
-        );
-        setReviews(updatedReviews);
-        localStorage.setItem('reviews', JSON.stringify(updatedReviews));
-        window.dispatchEvent(new Event('local-storage-update')); // Notify HomePage
-        alert(`Review ${newStatus}!`);
-    };
-
-    const handleDelete = (reviewId) => {
-        if (window.confirm('Are you sure you want to delete this review?')) {
-            const updatedReviews = reviews.filter(review => review.id !== reviewId);
-            setReviews(updatedReviews);
-            localStorage.setItem('reviews', JSON.stringify(updatedReviews));
-            window.dispatchEvent(new Event('local-storage-update')); // Notify HomePage
-            alert('Review deleted successfully!');
+    const loadReviews = async () => {
+        try {
+            const data = await getAllReviews();
+            setReviews(data);
+        } catch (error) {
+            console.error("Failed to load reviews", error);
         }
     };
 
-    const handleEdit = () => {
-        const updatedReviews = reviews.map(review =>
-            review.id === selectedReview.id ? { ...review, comment: editedComment } : review
-        );
-        setReviews(updatedReviews);
-        localStorage.setItem('reviews', JSON.stringify(updatedReviews));
-        window.dispatchEvent(new Event('local-storage-update')); // Notify HomePage
-        setEditMode(false);
-        setShowModal(false);
-        alert('Review updated successfully!');
+    const handleStatusChange = async (reviewId, newStatus) => {
+        try {
+            await updateReviewStatus(reviewId, newStatus);
+            loadReviews();
+            alert(`Review ${newStatus}!`);
+        } catch (error) {
+            console.error("Error updating review status", error);
+            alert("Failed to update status");
+        }
+    };
+
+    const handleDelete = async (reviewId) => {
+        if (window.confirm('Are you sure you want to delete this review?')) {
+            try {
+                await deleteReview(reviewId);
+                loadReviews();
+                alert('Review deleted successfully!');
+            } catch (error) {
+                console.error("Error deleting review", error);
+                alert("Failed to delete review");
+            }
+        }
+    };
+
+    const handleEdit = async () => {
+        try {
+            await updateReview(selectedReview.id, { comment: editedComment });
+            loadReviews();
+            setEditMode(false);
+            setShowModal(false);
+            alert('Review updated successfully!');
+        } catch (error) {
+            console.error("Error updating review", error);
+            alert("Failed to update review");
+        }
     };
 
     const handleViewDetails = (review) => {

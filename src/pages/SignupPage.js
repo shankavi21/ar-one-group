@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { Form, Button } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import AuthLayout from '../components/AuthLayout';
-import { auth, googleProvider } from '../firebase';
+import { auth, googleProvider, db } from '../firebase';
 import { createUserWithEmailAndPassword, updateProfile, signInWithPopup } from 'firebase/auth';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 
 const SignupPage = () => {
     const navigate = useNavigate();
@@ -17,18 +18,70 @@ const SignupPage = () => {
         setError('');
         try {
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            await updateProfile(userCredential.user, { displayName: name });
+            const user = userCredential.user;
+
+            await updateProfile(user, { displayName: name });
+
+            // Save user data to Firestore
+            await setDoc(doc(db, "users", user.uid), {
+                uid: user.uid,
+                name: name,
+                email: email,
+                role: 'user',
+                createdAt: serverTimestamp(),
+                lastLogin: serverTimestamp()
+            });
+
+            // Set localStorage for immediate UI update (AppNavbar uses this) - Scoped to UID
+            localStorage.setItem(`userDisplayName_${user.uid}`, name);
+            window.dispatchEvent(new Event('local-storage-update'));
+
             navigate('/home');
         } catch (err) {
+            console.error("Registration error:", err);
             setError(err.message);
         }
     };
 
     const handleGoogleSignIn = async () => {
         try {
-            await signInWithPopup(auth, googleProvider);
+            const result = await signInWithPopup(auth, googleProvider);
+            const user = result.user;
+
+            // Check if user exists first to avoid overwriting existing data (like role)
+            const userDocRef = doc(db, "users", user.uid);
+            const userDoc = await getDoc(userDocRef);
+
+            if (!userDoc.exists()) {
+                await setDoc(userDocRef, {
+                    uid: user.uid,
+                    name: user.displayName,
+                    email: user.email,
+                    role: 'user',
+                    createdAt: serverTimestamp(),
+                    lastLogin: serverTimestamp()
+                });
+                // Set initial local storage for new Google user - Scoped to UID
+                localStorage.setItem(`userDisplayName_${user.uid}`, user.displayName);
+                localStorage.setItem(`userPhotoURL_${user.uid}`, user.photoURL);
+            } else {
+                await setDoc(userDocRef, {
+                    lastLogin: serverTimestamp()
+                }, { merge: true });
+
+                // Fetch latest user data to update localStorage - Scoped to UID
+                const userData = userDoc.data();
+                if (userData.name) localStorage.setItem(`userDisplayName_${user.uid}`, userData.name);
+                if (userData.photoURL) localStorage.setItem(`userPhotoURL_${user.uid}`, userData.photoURL);
+                if (userData.phone) localStorage.setItem(`userPhone_${user.uid}`, userData.phone);
+                if (userData.bio) localStorage.setItem(`userBio_${user.uid}`, userData.bio);
+
+                window.dispatchEvent(new Event('local-storage-update'));
+            }
+
             navigate('/home');
         } catch (err) {
+            console.error("Google Sign In error:", err);
             setError(err.message);
         }
     };

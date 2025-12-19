@@ -1,4 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { auth } from '../firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { db } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 // Currency conversion rates (base: LKR)
 const CURRENCY_RATES = {
@@ -22,12 +26,54 @@ const AppContext = createContext();
 export const AppProvider = ({ children }) => {
     const [currency, setCurrency] = useState(localStorage.getItem('currency') || 'LKR');
     const [language, setLanguage] = useState(localStorage.getItem('language') || 'English');
+    const [user, setUser] = useState(null);
+    const [userProfile, setUserProfile] = useState(null);
+    const [loadingUser, setLoadingUser] = useState(true);
+
     const [notifications, setNotifications] = useState({
         emailNotifications: JSON.parse(localStorage.getItem('emailNotifications') || 'true'),
         smsNotifications: JSON.parse(localStorage.getItem('smsNotifications') || 'false'),
         newsletterSubscription: JSON.parse(localStorage.getItem('newsletterSubscription') || 'true'),
         bookingReminders: JSON.parse(localStorage.getItem('bookingReminders') || 'true')
     });
+
+    const refreshUserProfile = async (currentUser = auth.currentUser) => {
+        if (currentUser) {
+            try {
+                const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    setUserProfile(userData);
+
+                    // Sync to localStorage for UI components (Scoped to UID)
+                    if (userData.name) localStorage.setItem(`userDisplayName_${currentUser.uid}`, userData.name);
+                    if (userData.photoURL) localStorage.setItem(`userPhotoURL_${currentUser.uid}`, userData.photoURL);
+                    if (userData.phone) localStorage.setItem(`userPhone_${currentUser.uid}`, userData.phone);
+                    if (userData.bio) localStorage.setItem(`userBio_${currentUser.uid}`, userData.bio);
+
+                    // Trigger update across the app
+                    window.dispatchEvent(new Event('local-storage-update'));
+                    return userData;
+                }
+            } catch (error) {
+                console.error("Error refreshing user profile:", error);
+            }
+        }
+        return null;
+    };
+
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+            if (currentUser) {
+                await refreshUserProfile(currentUser);
+            } else {
+                setUserProfile(null);
+            }
+            setUser(currentUser);
+            setLoadingUser(false);
+        });
+        return () => unsubscribe();
+    }, []);
 
     // Save to localStorage when changed
     useEffect(() => {
@@ -80,12 +126,16 @@ export const AppProvider = ({ children }) => {
     };
 
     const value = {
+        user,
+        userProfile,
+        loadingUser,
         currency,
         language,
         notifications,
         updateCurrency,
         updateLanguage,
         updateNotifications,
+        refreshUserProfile,
         convertPrice,
         formatPrice,
         CURRENCY_SYMBOLS

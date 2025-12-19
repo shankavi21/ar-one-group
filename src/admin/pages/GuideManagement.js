@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Card, Table, Button, Form, Modal, Badge, InputGroup, Row, Col, Image } from 'react-bootstrap';
 import { FaSearch, FaEdit, FaTrash, FaPlus, FaCheck, FaTimes, FaStar } from 'react-icons/fa';
 
+import { getAllGuides, addGuide, updateGuide, deleteGuide } from '../../services/firestoreService';
+
 const GuideManagement = () => {
     const [guides, setGuides] = useState([]);
     const [filteredGuides, setFilteredGuides] = useState([]);
@@ -30,18 +32,13 @@ const GuideManagement = () => {
         filterGuides();
     }, [searchTerm, guides]);
 
-    const loadGuides = () => {
-        // Load guides from localStorage or use default data
-        const savedGuides = localStorage.getItem('guides');
-        const guidesData = savedGuides ? JSON.parse(savedGuides) : [
-            { id: 1, name: 'Saman Perera', role: 'Cultural Expert', location: 'Kandy', image: 'https://randomuser.me/api/portraits/men/32.jpg', rating: 4.9, experience: '15 years', languages: ['English', 'Sinhala', 'Tamil'], bio: 'Expert in Sri Lankan culture and history', status: 'approved', phone: '+94 77 123 4567', email: 'saman@example.com' },
-            { id: 2, name: 'Nimali Silva', role: 'Wildlife Guide', location: 'Yala', image: 'https://randomuser.me/api/portraits/women/44.jpg', rating: 4.8, experience: '12 years', languages: ['English', 'Sinhala'], bio: 'Specialized in wildlife safaris and nature tours', status: 'approved', phone: '+94 77 234 5678', email: 'nimali@example.com' },
-            { id: 3, name: 'Kumar Sangakkara', role: 'Adventure Lead', location: 'Ella', image: 'https://randomuser.me/api/portraits/men/22.jpg', rating: 5.0, experience: '10 years', languages: ['English', 'Sinhala'], bio: 'Adventure sports and trekking specialist', status: 'approved', phone: '+94 77 345 6789', email: 'kumar@example.com' },
-            { id: 4, name: 'Dinesh Chandimal', role: 'Historian', location: 'Anuradhapura', image: 'https://randomuser.me/api/portraits/men/15.jpg', rating: 4.7, experience: '20 years', languages: ['English', 'Sinhala', 'Hindi'], bio: 'Ancient history and archaeology expert', status: 'pending', phone: '+94 77 456 7890', email: 'dinesh@example.com' },
-            { id: 5, name: 'Chathurika Fernando', role: 'Eco-Tourism', location: 'Sinharaja', image: 'https://randomuser.me/api/portraits/women/65.jpg', rating: 4.9, experience: '8 years', languages: ['English', 'Sinhala'], bio: 'Rainforest and eco-tourism specialist', status: 'approved', phone: '+94 77 567 8901', email: 'chathurika@example.com' },
-        ];
-        setGuides(guidesData);
-        localStorage.setItem('guides', JSON.stringify(guidesData));
+    const loadGuides = async () => {
+        try {
+            const data = await getAllGuides();
+            setGuides(data);
+        } catch (error) {
+            console.error("Failed to load guides", error);
+        }
     };
 
     const filterGuides = () => {
@@ -76,49 +73,52 @@ const GuideManagement = () => {
         setShowModal(true);
     };
 
-    const handleSave = () => {
-        let updatedGuides;
-        if (editingGuide && guides.find(g => g.id === editingGuide.id)) {
-            // Edit existing guide
-            updatedGuides = guides.map(guide =>
-                guide.id === editingGuide.id ? { ...guide, ...formData } : guide
-            );
-        } else {
-            // Add new guide
-            const newGuide = {
-                id: Date.now(),
-                ...formData
-            };
-            updatedGuides = [...guides, newGuide];
+    const handleSave = async () => {
+        try {
+            if (editingGuide && editingGuide.id) {
+                // Edit existing
+                await updateGuide(editingGuide.id, formData);
+                alert('Guide updated successfully!');
+            } else {
+                // Add new
+                await addGuide(formData);
+                alert('Guide added successfully!');
+            }
+            loadGuides();
+            setShowModal(false);
+            setEditingGuide(null);
+        } catch (error) {
+            console.error("Error saving guide", error);
+            alert("Failed to save guide");
         }
-
-        setGuides(updatedGuides);
-        localStorage.setItem('guides', JSON.stringify(updatedGuides));
-        setShowModal(false);
-        setEditingGuide(null);
-        alert(editingGuide?.id ? 'Guide updated successfully!' : 'Guide added successfully!');
     };
 
-    const handleDelete = (guideId) => {
+    const handleDelete = async (guideId) => {
         if (window.confirm('Are you sure you want to delete this guide?')) {
-            const updatedGuides = guides.filter(guide => guide.id !== guideId);
-            setGuides(updatedGuides);
-            localStorage.setItem('guides', JSON.stringify(updatedGuides));
-            alert('Guide deleted successfully!');
+            try {
+                await deleteGuide(guideId);
+                loadGuides();
+                alert('Guide deleted successfully!');
+            } catch (error) {
+                console.error("Error deleting guide", error);
+                alert("Failed to delete guide");
+            }
         }
     };
 
-    const handleStatusChange = (guideId, newStatus) => {
-        const updatedGuides = guides.map(guide =>
-            guide.id === guideId ? { ...guide, status: newStatus } : guide
-        );
-        setGuides(updatedGuides);
-        localStorage.setItem('guides', JSON.stringify(updatedGuides));
-        alert(`Guide ${newStatus}!`);
+    const handleStatusChange = async (guideId, newStatus) => {
+        try {
+            await updateGuide(guideId, { status: newStatus });
+            loadGuides();
+            alert(`Guide ${newStatus}!`);
+        } catch (error) {
+            console.error("Error updating status", error);
+            alert("Failed to update status");
+        }
     };
 
     const handleAddNew = () => {
-        setEditingGuide({ id: null });
+        setEditingGuide(null);
         setFormData({
             name: '',
             role: '',

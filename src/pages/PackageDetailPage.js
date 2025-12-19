@@ -7,13 +7,19 @@ import Footer from '../components/Footer';
 import { auth } from '../firebase';
 import { useApp } from '../context/AppContext';
 
+import { getPackage, getAllGuides, createBooking, getBookingsByDate, verifyOfferCode, getSavedTrips, toggleSavedTrip } from '../services/firestoreService';
+
 const PackageDetailPage = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const user = auth.currentUser;
-    const { formatPrice } = useApp(); // Get formatPrice for currency conversion
+    const { user, loadingUser, formatPrice } = useApp(); // Get user and formatPrice from AppContext
     const [activeTab, setActiveTab] = useState('overview');
     const [isSaved, setIsSaved] = useState(false);
+
+    // Data from Firestore
+    const [pkg, setPkg] = useState(null);
+    const [guides, setGuides] = useState([]);
+    const [loading, setLoading] = useState(true);
 
     // Modal states
     const [showBookingModal, setShowBookingModal] = useState(false);
@@ -41,295 +47,149 @@ const PackageDetailPage = () => {
     const [availableGuides, setAvailableGuides] = useState([]);
     const [guideAvailabilityError, setGuideAvailabilityError] = useState('');
 
+    // Offer/Discount handling
+    const [offerCode, setOfferCode] = useState('');
+    const [appliedDiscount, setAppliedDiscount] = useState(null);
+    const [discountError, setDiscountError] = useState('');
+    const [discountSuccess, setDiscountSuccess] = useState('');
+
     // Pricing constants
     const CHILDREN_DISCOUNT = 0.5; // 50% discount for children
 
-    // Comprehensive Mock Data for All Packages
-    const packages = [
-        {
-            id: 1,
-            title: 'Sigiriya Adventure',
-            location: 'Sigiriya, Sri Lanka',
-            price: 45000,
-            duration: '3 Days',
-            image: '/sigiriya.png',
-            rating: 4.8,
-            description: 'Climb the ancient rock fortress of Sigiriya, a UNESCO World Heritage site. Explore the water gardens, frescoes, and the mirror wall. This package also includes a village tour and authentic Sri Lankan lunch.',
-            included: ['Transport', 'Hotel Stay', 'Breakfast & Dinner', 'Entrance Fees', 'English Speaking Guide'],
-            hotels: [
-                { name: 'Heritance Kandalama', type: 'Luxury 5-Star', image: '/hotel_sigiriya1.jpg', description: 'Award-winning eco hotel designed by Geoffrey Bawa' },
-                { name: 'Aliya Resort and Spa', type: '4 Star Resort', image: '/hotel_sigiriya2.jpg', description: 'Contemporary hotel with stunning rock fortress views' }
-            ],
-            transport: 'Comfortable air-conditioned private vehicle (Car/Van) with an experienced driver-guide throughout the tour.',
-            food: 'Includes daily breakfast at the hotel. One authentic village lunch (rice and curry) experience with a local family is included.',
-            mapLocation: 'Sigiriya, Sri Lanka',
-            gallery: [
-                '/sigiriya.png',
-                '/sigiriya_gallery.jpg',
-                '/sigiriya_gallery2.jpg',
-                '/hotel_sigiriya1.jpg',
-                '/hotel_sigiriya2.jpg',
-                '/yala.jpg'
-            ]
-        },
-        {
-            id: 2,
-            title: 'Ella Hill Climb',
-            location: 'Ella, Sri Lanka',
-            price: 35000,
-            duration: '2 Days',
-            image: '/ella.png',
-            rating: 4.9,
-            description: 'Experience the cool climate and stunning views of Ella. Hike up to Little Adam\'s Peak and visit the famous Nine Arches Bridge. Perfect for nature lovers and photographers.',
-            included: ['Train Tickets', 'Homestay', 'Breakfast', 'Guided Hike'],
-            hotels: [
-                { name: '98 Acres Resort', type: 'Luxury Boutique', image: '/hotel_ella1.jpg', description: 'Nestled in a tea plantation with panoramic valley views' },
-                { name: 'Ella Flower Garden', type: '3 Star Guesthouse', image: '/hotel_ella2.jpg', description: 'Cozy mountain retreat with authentic Sri Lankan hospitality' }
-            ],
-            transport: 'Scenic train journey from Kandy to Ella (observation class). Local transport in Tuk-Tuk included for sightseeing.',
-            food: 'Daily breakfast with mountain views. Traditional Sri Lankan dinner at a local cafe with live music.',
-            mapLocation: 'Ella, Sri Lanka',
-            gallery: [
-                '/ella.png',
-                '/ella_gallery.jpg',
-                '/ella_gallery2.jpg',
-                '/hotel_ella1.jpg',
-                '/hotel_ella2.jpg',
-                '/knuckles.jpg'
-            ]
-        },
-        {
-            id: 3,
-            title: 'Coastal Bliss',
-            location: 'Mirissa, Sri Lanka',
-            price: 60000,
-            duration: '4 Days',
-            image: '/beach.png',
-            rating: 4.7,
-            description: 'Relax on the sandy beaches of Mirissa. Go whale watching, surf the waves, or just soak up the sun. Includes a mesmerizing sunset boat ride.',
-            included: ['Beachfront Hotel', 'Whale Watching', 'Breakfast', 'Airport Transfer'],
-            hotels: [
-                { name: 'Mandara Resort', type: 'Luxury Beach Resort', image: '/hotel_mirissa1.jpg', description: 'Exclusive beachfront property with infinity pool' },
-                { name: 'Paradise Beach Club', type: '3 Star Beach Hotel', image: '/hotel_mirissa2.jpg', description: 'Direct beach access with stunning ocean views' }
-            ],
-            transport: 'Private coastal drive in a luxury sedan with experienced chauffeur.',
-            food: 'Seafood BBQ dinner on the beach included. Fresh tropical breakfast daily.',
-            mapLocation: 'Mirissa, Sri Lanka',
-            gallery: [
-                '/beach.png',
-                '/mirissa_gallery.jpg',
-                '/mirissa_gallery2.jpg',
-                '/hotel_mirissa1.jpg',
-                '/hotel_mirissa2.jpg',
-                '/galle.jpg'
-            ]
-        },
-        {
-            id: 4,
-            title: 'Cultural Triangle',
-            location: 'Kandy, Sri Lanka',
-            price: 55000,
-            duration: '3 Days',
-            image: '/kandy.jpg',
-            rating: 4.6,
-            description: 'Immerse yourself in the rich history of Kandy. Visit the Temple of the Tooth Relic, Royal Botanical Gardens, and witness a traditional cultural dance show.',
-            included: ['Hotel Stay', 'All Entry Fees', 'Cultural Show Tickets', 'Private Transport'],
-            hotels: [
-                { name: 'Queens Hotel', type: 'Heritage Hotel', image: '/hotel_kandy1.jpg', description: 'Colonial-era property in the heart of Kandy' },
-                { name: 'Grand Hotel', type: '4 Star', image: '/hotel_kandy2.jpg', description: 'Historic hotel with views of Kandy Lake' }
-            ],
-            transport: 'Air-conditioned van with professional driver for the entire group.',
-            food: 'Buffet breakfast daily and one traditional Kandyan dinner with cultural performance.',
-            mapLocation: 'Kandy, Sri Lanka',
-            gallery: [
-                '/kandy.jpg',
-                '/kandy_gallery.jpg',
-                '/kandy_gallery2.jpg',
-                '/hotel_kandy1.jpg',
-                '/hotel_kandy2.jpg',
-                '/sigiriya.png'
-            ]
-        },
-        {
-            id: 5,
-            title: 'Wild Yala Safari',
-            location: 'Yala, Sri Lanka',
-            price: 40000,
-            duration: '2 Days',
-            image: '/yala.jpg',
-            rating: 4.8,
-            description: 'Spot leopards, elephants, and exotic birds in the wild. Experience two thrilling game drives in Yala National Park, known for having the highest density of leopards in the world.',
-            included: ['Camping/Lodge', 'Safari Jeep', 'BBQ Dinner', 'Park Fees', 'Professional Guide'],
-            hotels: [
-                { name: 'Yala Safari Camp', type: 'Luxury Tented Camp', image: '/hotel_yala1.jpg', description: 'Glamping experience in the wilderness' },
-                { name: 'Cinnamon Wild', type: 'Safari Lodge', image: '/hotel_yala2.jpg', description: 'Eco-lodge on the edge of the national park' }
-            ],
-            transport: 'Private 4x4 Safari Jeep with expert naturalist guide.',
-            food: 'Traditional BBQ dinner under the stars. Full board included with local and international cuisine.',
-            mapLocation: 'Yala National Park, Sri Lanka',
-            gallery: [
-                '/yala.jpg',
-                '/hotel_yala1.jpg',
-                '/hotel_yala2.jpg',
-                '/beach.png',
-                '/galle.jpg',
-                '/mirissa_gallery.jpg'
-            ]
-        },
-        {
-            id: 6,
-            title: 'Historic Galle Fort',
-            location: 'Galle, Sri Lanka',
-            price: 30000,
-            duration: '1 Day',
-            image: '/galle.jpg',
-            rating: 4.9,
-            description: 'Explore the magnificent Dutch Fort in Galle, a UNESCO World Heritage Site. Walk through cobblestone streets, visit museums, boutique shops, and enjoy the iconic lighthouse views.',
-            included: ['Transport', 'Guide', 'Entry Fees', 'Lunch'],
-            hotels: [
-                { name: 'Jetwing Lighthouse', type: 'Luxury Heritage', image: '/hotel_galle1.jpg', description: 'Iconic clifftop hotel designed by Geoffrey Bawa' },
-                { name: 'Galle Fort Hotel', type: '4 Star Boutique', image: '/hotel_galle2.jpg', description: 'Restored mansion within the historic fort' }
-            ],
-            transport: 'Private air-conditioned vehicle with driver-guide.',
-            food: 'Authentic Sri Lankan lunch at a colonial-era restaurant within the fort.',
-            mapLocation: 'Galle Fort, Sri Lanka',
-            gallery: [
-                '/galle.jpg',
-                '/hotel_galle1.jpg',
-                '/hotel_galle2.jpg',
-                '/beach.png',
-                '/mirissa_gallery2.jpg',
-                '/yala.jpg'
-            ]
-        },
-        {
-            id: 7,
-            title: 'Knuckles Trek',
-            location: 'Matale, Sri Lanka',
-            price: 50000,
-            duration: '3 Days',
-            image: '/knuckles.jpg',
-            rating: 4.7,
-            description: 'Embark on an adventurous trek through the Knuckles Mountain Range, a biodiversity hotspot. Experience remote villages, misty peaks, and pristine waterfalls.',
-            included: ['Trekking Guide', 'Camping Equipment', 'All Meals', 'Transport', 'Permits'],
-            hotels: [
-                { name: 'Knuckles Mountain Resort', type: 'Eco Lodge', image: '/hotel_knuckles1.jpg', description: 'Sustainable retreat with mountain views' },
-                { name: 'The Rangala House', type: 'Boutique Villa', image: '/hotel_knuckles2.jpg', description: 'Charming property at the base of the range' }
-            ],
-            transport: '4WD vehicle for mountain terrain with experienced driver.',
-            food: 'Full board included with packed lunches on trek days. Traditional Sri Lankan meals.',
-            mapLocation: 'Knuckles Mountain Range, Sri Lanka',
-            gallery: [
-                '/knuckles.jpg',
-                '/hotel_knuckles1.jpg',
-                '/hotel_knuckles2.jpg',
-                '/ella.png',
-                '/ella_gallery.jpg',
-                '/kandy_gallery2.jpg'
-            ]
-        },
-        {
-            id: 8,
-            title: 'Jaffna Discovery',
-            location: 'Jaffna, Sri Lanka',
-            price: 65000,
-            duration: '4 Days',
-            image: '/jaffna.jpg',
-            rating: 4.5,
-            description: 'Discover the unique culture of Northern Sri Lanka. Visit the iconic Nallur Temple, Jaffna Fort, and experience the vibrant Tamil heritage, cuisine, and hospitality.',
-            included: ['Flights/Transport', 'Hotel', 'All Meals', 'Cultural Guide', 'Entry Fees'],
-            hotels: [
-                { name: 'Jetwing Jaffna', type: '4 Star Hotel', image: '/hotel_jaffna1.jpg', description: 'Contemporary hotel in the heart of Jaffna' },
-                { name: 'Tilko Jaffna City Hotel', type: '3 Star', image: '/hotel_jaffna2.jpg', description: 'Comfortable accommodation with local charm' }
-            ],
-            transport: 'Domestic flight to Jaffna. Private vehicle with cultural guide throughout.',
-            food: 'Full board with authentic Jaffna Tamil cuisine. Special cooking demonstration included.',
-            mapLocation: 'Jaffna, Sri Lanka',
-            gallery: [
-                '/jaffna.jpg',
-                '/jaffna_gallery1.jpg',
-                '/hotel_jaffna1.jpg',
-                '/hotel_jaffna2.jpg',
-                '/kandy.jpg',
-                '/sigiriya.png'
-            ]
-        },
-    ];
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                // Fetch package
+                const pkgData = await getPackage(id);
+                setPkg(pkgData);
 
-    const guides = [
-        { id: 1, name: 'Saman Perera', role: 'Cultural Expert', image: 'https://randomuser.me/api/portraits/men/32.jpg', experience: '15 years' },
-        { id: 2, name: 'Nimali Silva', role: 'Naturalist', image: 'https://randomuser.me/api/portraits/women/44.jpg', experience: '10 years' },
-        { id: 3, name: 'Kumar Sangakkara', role: 'Adventure Lead', image: 'https://randomuser.me/api/portraits/men/22.jpg', experience: '12 years' },
-        { id: 4, name: 'Dinesh Chandimal', role: 'Historian', image: 'https://randomuser.me/api/portraits/men/15.jpg', experience: '20 years' },
-        { id: 5, name: 'Chathurika Fernando', role: 'Eco Guide', image: 'https://randomuser.me/api/portraits/women/65.jpg', experience: '8 years' },
-    ];
-
-    const pkg = packages.find(p => p.id === parseInt(id));
+                // Fetch guides
+                const guidesData = await getAllGuides();
+                // Filter active guides
+                const activeGuides = guidesData.filter(g => !g.status || g.status === 'active' || g.status === 'approved');
+                setGuides(activeGuides);
+            } catch (error) {
+                console.error("Error loading data", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadData();
+    }, [id]);
 
     // Check if package is saved on mount
     useEffect(() => {
-        const saved = JSON.parse(localStorage.getItem('savedTrips') || '[]');
-        setIsSaved(saved.includes(parseInt(id)));
-    }, [id]);
-
-    // Calculate total price dynamically (returns price in LKR)
-    const calculateTotalPrice = () => {
-        if (!selectedHotel) return 0;
-
-        const basePrice = pkg.price; // Already a number in LKR
-        const adultPrice = basePrice * bookingData.adults;
-        const childPrice = basePrice * CHILDREN_DISCOUNT * bookingData.children;
-        return adultPrice + childPrice;
-    };
+        const checkSavedStatus = async () => {
+            if (user?.uid) {
+                try {
+                    const saved = await getSavedTrips(user.uid);
+                    setIsSaved(saved.includes(id) || saved.includes(parseInt(id)));
+                } catch (error) {
+                    console.error("Error checking saved status", error);
+                }
+            } else {
+                setIsSaved(false);
+            }
+        };
+        checkSavedStatus();
+    }, [id, user]);
 
     // Check guide availability for selected date
-    const checkGuideAvailability = (selectedDate) => {
+    const checkGuideAvailability = async (selectedDate) => {
         if (!selectedDate) {
             setAvailableGuides(guides);
             return;
         }
 
-        // Get all existing bookings from localStorage
-        const existingBookings = JSON.parse(localStorage.getItem('userBookings') || '[]');
+        try {
+            // Get bookings for this date from Firestore
+            const bookingsOnDate = await getBookingsByDate(selectedDate);
 
-        // Find guides that are already booked on the selected date
-        const bookedGuideIds = existingBookings
-            .filter(booking => booking.travelDate === selectedDate)
-            .map(booking => booking.guide.id);
+            // Find guides that are already booked on the selected date
+            const bookedGuideIds = bookingsOnDate.map(booking => booking.guide?.id);
 
-        // Filter out booked guides
-        const available = guides.filter(guide => !bookedGuideIds.includes(guide.id));
+            // Filter out booked guides
+            const available = guides.filter(guide => !bookedGuideIds.includes(guide.id));
 
-        setAvailableGuides(available);
+            setAvailableGuides(available);
 
-        // Set error message if no guides available
-        if (available.length === 0) {
-            setGuideAvailabilityError('Sorry, no guides are available for your selected dates. Please choose different dates or contact us.');
-        } else {
-            setGuideAvailabilityError('');
+            // Set error message if no guides available
+            if (available.length === 0) {
+                setGuideAvailabilityError('Sorry, no guides are available for your selected dates. Please choose different dates or contact us.');
+            } else {
+                setGuideAvailabilityError('');
+            }
+
+            // Clear selected guide if they're not available on the new date
+            if (selectedGuide && bookedGuideIds.includes(selectedGuide.id)) {
+                setSelectedGuide(null);
+            }
+        } catch (error) {
+            console.error("Error checking guide availability", error);
+            // Fallback to all guides if error? Or assume unavailable?
+            // Safer to show all but warn? Or show none?
+            // Let's show all and log error.
+            setAvailableGuides(guides);
         }
+    };
 
-        // Clear selected guide if they're not available on the new date
-        if (selectedGuide && bookedGuideIds.includes(selectedGuide.id)) {
-            setSelectedGuide(null);
+    const calculateTotalPrice = () => {
+        if (!pkg) return 0;
+        const adultPrice = pkg.price * bookingData.adults;
+        const childPrice = pkg.price * CHILDREN_DISCOUNT * bookingData.children;
+        let total = adultPrice + childPrice;
+
+        if (appliedDiscount) {
+            const discountValue = appliedDiscount.discount; // e.g., "20%" or "LKR 5000"
+            if (discountValue.includes('%')) {
+                const percentage = parseFloat(discountValue) / 100;
+                total -= total * percentage;
+            } else {
+                // Remove non-numeric chars except dot
+                const amount = parseFloat(discountValue.replace(/[^0-9.]/g, ''));
+                if (!isNaN(amount)) {
+                    total -= amount;
+                }
+            }
+        }
+        return Math.max(0, total);
+    };
+
+    const handleApplyPromo = async () => {
+        setDiscountError('');
+        setDiscountSuccess('');
+        setAppliedDiscount(null);
+
+        if (!offerCode.trim()) return;
+
+        try {
+            const result = await verifyOfferCode(offerCode.trim());
+            if (result.valid) {
+                setAppliedDiscount(result.offer);
+                setDiscountSuccess(`Offer Applied: ${result.offer.title} (${result.offer.discount})`);
+            } else {
+                setDiscountError(result.message);
+            }
+        } catch (error) {
+            console.error("Promo check error", error);
+            setDiscountError("Failed to verify code");
         }
     };
 
     // Handler functions
-    const toggleSave = () => {
-        let saved = JSON.parse(localStorage.getItem('savedTrips') || '[]');
-        const packageId = parseInt(id);
-
-        if (saved.includes(packageId)) {
-            saved = saved.filter(pid => pid !== packageId);
-            setIsSaved(false);
-        } else {
-            saved.push(packageId);
-            setIsSaved(true);
+    const toggleSave = async () => {
+        if (!user) {
+            alert("Please login to save packages!");
+            return;
         }
 
-        localStorage.setItem('savedTrips', JSON.stringify(saved));
-        window.dispatchEvent(new Event('local-storage-update'));
+        try {
+            const newSaved = await toggleSavedTrip(user.uid, id);
+            setIsSaved(newSaved.includes(id) || newSaved.includes(parseInt(id)));
+            window.dispatchEvent(new Event('local-storage-update'));
+        } catch (error) {
+            console.error("Error toggling save:", error);
+        }
     };
 
     const handleBookNow = () => {
@@ -390,13 +250,14 @@ const PackageDetailPage = () => {
         setBookingStep(bookingStep - 1);
     };
 
-    const handleCompleteBooking = () => {
-        // Generate booking ID
-        const bookingId = 'BK' + Date.now().toString().slice(-8);
+    const handleCompleteBooking = async () => {
+        // Generate booking ID (simple prefix for display, but firestore has its own ID)
+        const bookingDisplayId = 'BK' + Date.now().toString().slice(-6);
         const totalAmount = calculateTotalPrice();
 
         const newBooking = {
-            bookingId: bookingId,
+            userId: user ? user.uid : null, // Save user ID (from AppContext)
+            bookingId: bookingDisplayId,
             packageId: pkg.id,
             packageTitle: pkg.title,
             packageImage: pkg.image,
@@ -413,27 +274,34 @@ const PackageDetailPage = () => {
             specialRequests: bookingData.specialRequests,
             paymentMethod: paymentMethod,
             totalAmount: totalAmount,
-            status: 'confirmed',
-            bookingDate: new Date().toISOString(),
-            paymentStatus: 'paid'
+            appliedOffer: appliedDiscount ? {
+                code: appliedDiscount.code,
+                discount: appliedDiscount.discount,
+                title: appliedDiscount.title
+            } : null,
+            // status and paymentStatus set in service or default to pending
         };
 
-        // Save to localStorage
-        const existingBookings = JSON.parse(localStorage.getItem('userBookings') || '[]');
-        existingBookings.push(newBooking);
-        localStorage.setItem('userBookings', JSON.stringify(existingBookings));
+        try {
+            await createBooking(newBooking);
 
-        // Show success
-        alert(`✅ Payment Successful!\n\nBooking Confirmed!\nBooking ID: ${bookingId}\n\nPackage: ${pkg.title}\nDate: ${bookingData.date}\nAdults: ${bookingData.adults} | Children: ${bookingData.children}\nGuide: ${selectedGuide.name}\nHotel: ${selectedHotel.name}\n\nTotal Paid: ${formatPrice(totalAmount)}\n\nYou will receive a confirmation email shortly.`);
+            // Show success
+            alert(`✅ Payment Successful!\n\nBooking Confirmed!\nBooking Ref: ${bookingDisplayId}\n\nPackage: ${pkg.title}\nDate: ${bookingData.date}\nAdults: ${bookingData.adults} | Children: ${bookingData.children}\nGuide: ${selectedGuide.name}\nHotel: ${selectedHotel.name}\n\nTotal Paid: ${formatPrice(totalAmount)}\n\nYou will receive a confirmation email shortly.`);
 
-        closeBookingModal();
+            closeBookingModal();
 
-        // Navigate to My Bookings
-        setTimeout(() => {
-            if (window.confirm('Would you like to view your booking details now?')) {
-                navigate('/my-bookings');
+            // Navigate to My Bookings
+            if (user) {
+                setTimeout(() => {
+                    if (window.confirm('Would you like to view your booking details now?')) {
+                        navigate('/my-bookings');
+                    }
+                }, 500);
             }
-        }, 500);
+        } catch (error) {
+            console.error("Error creating booking", error);
+            alert("Booking failed. Please try again.");
+        }
     };
 
     const closeBookingModal = () => {
@@ -453,6 +321,10 @@ const PackageDetailPage = () => {
             setSelectedGuide(null);
             setSelectedHotel(null);
             setPaymentMethod('');
+            setOfferCode('');
+            setAppliedDiscount(null);
+            setDiscountError('');
+            setDiscountSuccess('');
         }, 300);
     };
 
@@ -1049,6 +921,28 @@ const PackageDetailPage = () => {
                     {/* Step 3: Review & Payment */}
                     {bookingStep === 3 && (
                         <div className="fade-in">
+                            {/* Promo Code Section */}
+                            <div className="mb-4 p-4 rounded-4 bg-light border border-dashed border-secondary">
+                                <h6 className="fw-bold mb-3">Have a Promo Code?</h6>
+                                <div className="d-flex gap-2">
+                                    <Form.Control
+                                        placeholder="Enter code here"
+                                        value={offerCode}
+                                        onChange={(e) => setOfferCode(e.target.value)}
+                                        disabled={!!appliedDiscount}
+                                    />
+                                    {appliedDiscount ? (
+                                        <Button variant="outline-danger" onClick={() => { setAppliedDiscount(null); setOfferCode(''); setDiscountSuccess(''); }}>
+                                            Remove
+                                        </Button>
+                                    ) : (
+                                        <Button variant="dark" onClick={handleApplyPromo}>Apply</Button>
+                                    )}
+                                </div>
+                                {discountError && <small className="text-danger mt-2 d-block">{discountError}</small>}
+                                {discountSuccess && <small className="text-success mt-2 d-block fw-bold">{discountSuccess}</small>}
+                            </div>
+
                             <div className="mb-4 p-4 rounded-4" style={{ background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)' }}>
                                 <h5 className="fw-bold mb-3" style={{ color: '#1f2937' }}>
                                     Booking Summary
@@ -1075,6 +969,14 @@ const PackageDetailPage = () => {
                                         <Row className="g-2 mb-2">
                                             <Col xs={7}><span className="text-success">Children ({bookingData.children} × 50% off)</span></Col>
                                             <Col xs={5} className="text-end"><span className="fw-semibold text-success">{formatPrice(pkg.price * CHILDREN_DISCOUNT * bookingData.children)}</span></Col>
+                                        </Row>
+                                    )}
+                                    {appliedDiscount && (
+                                        <Row className="g-2 mb-2">
+                                            <Col xs={7}><span className="text-danger">Discount ({appliedDiscount.discount})</span></Col>
+                                            <Col xs={5} className="text-end"><span className="fw-semibold text-danger">
+                                                - {formatPrice((pkg.price * bookingData.adults + pkg.price * CHILDREN_DISCOUNT * bookingData.children) - calculateTotalPrice())}
+                                            </span></Col>
                                         </Row>
                                     )}
                                     <Row className="g-2 pt-2 border-top">

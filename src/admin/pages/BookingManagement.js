@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Card, Table, Button, Form, Modal, Badge, InputGroup, Row, Col } from 'react-bootstrap';
 import { FaSearch, FaEye, FaCheckCircle, FaTimes, FaCalendar } from 'react-icons/fa';
 
+import { getAllBookings, updateBookingStatus } from '../../services/firestoreService';
+
 const BookingManagement = () => {
     const [bookings, setBookings] = useState([]);
     const [filteredBookings, setFilteredBookings] = useState([]);
@@ -18,9 +20,13 @@ const BookingManagement = () => {
         filterBookings();
     }, [searchTerm, filterStatus, bookings]);
 
-    const loadBookings = () => {
-        const savedBookings = JSON.parse(localStorage.getItem('userBookings') || '[]');
-        setBookings(savedBookings);
+    const loadBookings = async () => {
+        try {
+            const data = await getAllBookings();
+            setBookings(data);
+        } catch (error) {
+            console.error("Failed to load bookings", error);
+        }
     };
 
     const filterBookings = () => {
@@ -44,13 +50,33 @@ const BookingManagement = () => {
         setFilteredBookings(filtered);
     };
 
-    const handleStatusUpdate = (bookingId, newStatus) => {
-        const updatedBookings = bookings.map(booking =>
-            booking.bookingId === bookingId ? { ...booking, status: newStatus } : booking
-        );
-        setBookings(updatedBookings);
-        localStorage.setItem('userBookings', JSON.stringify(updatedBookings));
-        alert(`Booking status updated to ${newStatus}!`);
+    const handleStatusUpdate = async (bookingId, newStatus) => {
+        // Find the full document ID if bookingId is just a display field
+        // However, in our firestore service, we return { id: doc.id, ...data }. 
+        // If bookingId is just a field, we need 'id' property.
+        // Let's assume passed 'bookingId' here is the `bookingId` field for display, but for update we need document ID.
+        // Wait, the previous code used `booking.bookingId` as the key. 
+        // The service returns `id` (firestore id).
+        // Let's check how the table calls this.
+        // Table: onClick={() => handleStatusUpdate(booking.bookingId, 'confirmed')}
+        // I should change the Table slightly to pass the proper ID if booking.bookingId != booking.id.
+        // Or I can just look it up.
+        // Actually, let's fix the Table render part later or now.
+        // It's better to update this function to accept the document ID.
+
+        try {
+            // Find the booking to get its doc ID if needed, or update the call site.
+            // I'll update the call site in the next step, but here I'll assume we pass the doc ID or I find it.
+            const booking = bookings.find(b => b.bookingId === bookingId || b.id === bookingId);
+            if (!booking) return;
+
+            await updateBookingStatus(booking.id, newStatus);
+            loadBookings();
+            alert(`Booking status updated to ${newStatus}!`);
+        } catch (error) {
+            console.error("Error updating booking status", error);
+            alert("Failed to update status");
+        }
     };
 
     const handleViewDetails = (booking) => {
