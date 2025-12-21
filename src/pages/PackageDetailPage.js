@@ -7,7 +7,7 @@ import Footer from '../components/Footer';
 import { auth } from '../firebase';
 import { useApp } from '../context/AppContext';
 
-import { getPackage, getAllGuides, createBooking, getBookingsByDate, verifyOfferCode, getSavedTrips, toggleSavedTrip } from '../services/firestoreService';
+import { getPackage, getAllGuides, createBooking, getBookingsByDate, getBlockedDatesByDate, verifyOfferCode, getSavedTrips, toggleSavedTrip } from '../services/firestoreService';
 
 const PackageDetailPage = () => {
     const { id } = useParams();
@@ -55,6 +55,7 @@ const PackageDetailPage = () => {
 
     // Pricing constants
     const CHILDREN_DISCOUNT = 0.5; // 50% discount for children
+    const SELF_GUIDED_DISCOUNT = 0.15; // 15% reduction if "No Guide Needed" is selected
 
     useEffect(() => {
         const loadData = async () => {
@@ -98,38 +99,47 @@ const PackageDetailPage = () => {
     const checkGuideAvailability = async (selectedDate) => {
         if (!selectedDate) {
             setAvailableGuides(guides);
-            return;
+            return guides;
         }
 
         try {
             // Get bookings for this date from Firestore
             const bookingsOnDate = await getBookingsByDate(selectedDate);
 
+            // Get manual blocks for this date
+            const blocksOnDate = await getBlockedDatesByDate(selectedDate);
+
             // Find guides that are already booked on the selected date
             const bookedGuideIds = bookingsOnDate.map(booking => booking.guide?.id);
 
-            // Filter out booked guides
-            const available = guides.filter(guide => !bookedGuideIds.includes(guide.id));
+            // Find guides that blocked this date
+            const blockedGuideIds = blocksOnDate.map(block => block.guideId);
+
+            // Combine both unavailable lists
+            const unavailableIds = [...new Set([...bookedGuideIds, ...blockedGuideIds])];
+
+            // Filter out booked/blocked guides
+            const available = guides.filter(guide => !unavailableIds.includes(guide.id));
 
             setAvailableGuides(available);
 
             // Set error message if no guides available
-            if (available.length === 0) {
+            if (guides.length > 0 && available.length === 0) {
                 setGuideAvailabilityError('Sorry, no guides are available for your selected dates. Please choose different dates or contact us.');
             } else {
                 setGuideAvailabilityError('');
             }
 
             // Clear selected guide if they're not available on the new date
-            if (selectedGuide && bookedGuideIds.includes(selectedGuide.id)) {
+            if (selectedGuide && unavailableIds.includes(selectedGuide.id)) {
                 setSelectedGuide(null);
             }
+
+            return available;
         } catch (error) {
             console.error("Error checking guide availability", error);
-            // Fallback to all guides if error? Or assume unavailable?
-            // Safer to show all but warn? Or show none?
-            // Let's show all and log error.
             setAvailableGuides(guides);
+            return guides;
         }
     };
 
@@ -138,6 +148,11 @@ const PackageDetailPage = () => {
         const adultPrice = pkg.price * bookingData.adults;
         const childPrice = pkg.price * CHILDREN_DISCOUNT * bookingData.children;
         let total = adultPrice + childPrice;
+
+        // Apply self-guided reduction if applicable
+        if (selectedGuide?.id === 'no-guide') {
+            total -= total * SELF_GUIDED_DISCOUNT;
+        }
 
         if (appliedDiscount) {
             const discountValue = appliedDiscount.discount; // e.g., "20%" or "LKR 5000"
@@ -197,7 +212,7 @@ const PackageDetailPage = () => {
         setShowBookingModal(true);
     };
 
-    const handleNextStep = () => {
+    const handleNextStep = async () => {
         if (bookingStep === 1) {
             // Validate step 1
             if (!bookingData.name || !bookingData.email || !bookingData.phone || !bookingData.date) {
@@ -209,7 +224,7 @@ const PackageDetailPage = () => {
                 return;
             }
             // Check guide availability for selected date
-            checkGuideAvailability(bookingData.date);
+            await checkGuideAvailability(bookingData.date);
             setBookingStep(2);
         } else if (bookingStep === 2) {
             // Validate step 2
@@ -218,16 +233,16 @@ const PackageDetailPage = () => {
                 return;
             }
 
-            // Check if selected guide is available
-            const existingBookings = JSON.parse(localStorage.getItem('userBookings') || '[]');
-            const isGuideBooked = existingBookings.some(
-                booking => booking.travelDate === bookingData.date && booking.guide.id === selectedGuide.id
-            );
+            // Check if selected guide is still available (re-verify)
+            if (selectedGuide.id !== 'no-guide') {
+                const availableOnDate = await checkGuideAvailability(bookingData.date);
+                const isStillAvailable = availableOnDate.some(g => g.id === selectedGuide.id);
 
-            if (isGuideBooked) {
-                alert('This guide is not available on your selected dates. Please choose another guide.');
-                setSelectedGuide(null);
-                return;
+                if (!isStillAvailable) {
+                    alert('This guide is no longer available on your selected dates. Please choose another guide.');
+                    setSelectedGuide(null);
+                    return;
+                }
             }
 
             if (!selectedHotel) {
@@ -333,12 +348,14 @@ const PackageDetailPage = () => {
         setAvailabilityChecked(false);
     };
 
-    const handleAvailabilityCheck = () => {
+    const handleAvailabilityCheck = async () => {
         if (!checkDate) {
             alert('Please select a date');
             return;
         }
-        // Simulate availability check
+
+        // Actually check availability
+        const available = await checkGuideAvailability(checkDate);
         setAvailabilityChecked(true);
     };
 
@@ -794,8 +811,52 @@ const PackageDetailPage = () => {
                                 )}
 
                                 <Row className="g-3">
-                                    {guides.slice(0, 3).map(guide => {
-                                        const isAvailable = availableGuides.length === 0 || availableGuides.some(g => g.id === guide.id);
+                                    {/* No Guide Option Card */}
+                                    <Col md={4}>
+                                        <Card
+                                            className={`border-0 rounded-4 h-100 guide-card ${selectedGuide?.id === 'no-guide' ? 'selected' : ''}`}
+                                            onClick={() => setSelectedGuide({ id: 'no-guide', name: 'No Guide Needed', role: 'Self-Guided', image: 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png' })}
+                                            style={{
+                                                cursor: 'pointer',
+                                                transition: 'all 0.3s ease',
+                                                boxShadow: selectedGuide?.id === 'no-guide' ? '0 8px 24px rgba(8, 145, 178, 0.3)' : '0 2px 8px rgba(0,0,0,0.1)',
+                                                border: selectedGuide?.id === 'no-guide' ? '3px solid #0891b2' : '3px solid transparent',
+                                                transform: selectedGuide?.id === 'no-guide' ? 'translateY(-4px)' : 'none'
+                                            }}
+                                        >
+                                            <Card.Body className="text-center p-4">
+                                                {selectedGuide?.id === 'no-guide' && (
+                                                    <div className="position-absolute top-0 end-0 m-2">
+                                                        <div className="rounded-circle d-flex align-items-center justify-content-center" style={{ width: '30px', height: '30px', background: '#0891b2', color: 'white' }}>
+                                                            <FaCheckCircle size={16} />
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                <div className="position-relative d-inline-block mb-3">
+                                                    <div
+                                                        className="rounded-circle d-flex align-items-center justify-content-center bg-light text-secondary"
+                                                        style={{
+                                                            width: '90px',
+                                                            height: '90px',
+                                                            border: '4px solid white',
+                                                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                                            fontSize: '40px'
+                                                        }}
+                                                    >
+                                                        🚶
+                                                    </div>
+                                                </div>
+                                                <h6 className="fw-bold mb-1" style={{ color: '#1f2937' }}>No Guide Needed</h6>
+                                                <Badge bg="secondary" className="mb-2 px-3 py-2">Self-Guided</Badge>
+                                                <div className="text-muted small">
+                                                    Explore at your own pace
+                                                </div>
+                                            </Card.Body>
+                                        </Card>
+                                    </Col>
+
+                                    {availableGuides.map(guide => {
+                                        const isAvailable = true; // They are already filtered in availableGuides
                                         return (
                                             <Col md={4} key={guide.id}>
                                                 <Card
@@ -971,11 +1032,17 @@ const PackageDetailPage = () => {
                                             <Col xs={5} className="text-end"><span className="fw-semibold text-success">{formatPrice(pkg.price * CHILDREN_DISCOUNT * bookingData.children)}</span></Col>
                                         </Row>
                                     )}
+                                    {selectedGuide?.id === 'no-guide' && (
+                                        <Row className="g-2 mb-2">
+                                            <Col xs={7}><span className="text-info">Self-Guided Discount ({(SELF_GUIDED_DISCOUNT * 100).toFixed(0)}% Off)</span></Col>
+                                            <Col xs={5} className="text-end"><span className="fw-semibold text-info">- {formatPrice((pkg.price * bookingData.adults + pkg.price * CHILDREN_DISCOUNT * bookingData.children) * SELF_GUIDED_DISCOUNT)}</span></Col>
+                                        </Row>
+                                    )}
                                     {appliedDiscount && (
                                         <Row className="g-2 mb-2">
-                                            <Col xs={7}><span className="text-danger">Discount ({appliedDiscount.discount})</span></Col>
+                                            <Col xs={7}><span className="text-danger">Offer ({appliedDiscount.discount})</span></Col>
                                             <Col xs={5} className="text-end"><span className="fw-semibold text-danger">
-                                                - {formatPrice((pkg.price * bookingData.adults + pkg.price * CHILDREN_DISCOUNT * bookingData.children) - calculateTotalPrice())}
+                                                - {formatPrice((pkg.price * bookingData.adults + pkg.price * CHILDREN_DISCOUNT * bookingData.children - (selectedGuide?.id === 'no-guide' ? (pkg.price * bookingData.adults + pkg.price * CHILDREN_DISCOUNT * bookingData.children) * SELF_GUIDED_DISCOUNT : 0)) - calculateTotalPrice())}
                                             </span></Col>
                                         </Row>
                                     )}
@@ -1090,16 +1157,23 @@ const PackageDetailPage = () => {
                             </div>
                             <h6 className="fw-bold mb-3">Available Guides for this date:</h6>
                             <div className="mb-3">
-                                {guides.slice(0, 3).map(guide => (
-                                    <div key={guide.id} className="d-flex align-items-center p-2 border rounded-3 mb-2">
-                                        <Image src={guide.image} roundedCircle style={{ width: '40px', height: '40px' }} className="me-3" />
-                                        <div className="text-start flex-grow-1">
-                                            <div className="fw-bold small">{guide.name}</div>
-                                            <small className="text-muted">{guide.role}</small>
+                                {availableGuides.length > 0 ? (
+                                    availableGuides.map(guide => (
+                                        <div key={guide.id} className="d-flex align-items-center p-2 border rounded-3 mb-2">
+                                            <Image src={guide.image} roundedCircle style={{ width: '40px', height: '40px', objectFit: 'cover' }} className="me-3" />
+                                            <div className="text-start flex-grow-1">
+                                                <div className="fw-bold small">{guide.name}</div>
+                                                <small className="text-muted">{guide.role}</small>
+                                            </div>
+                                            <Badge bg="success">Available</Badge>
                                         </div>
-                                        <Badge bg="success">Available</Badge>
+                                    ))
+                                ) : (
+                                    <div className="alert alert-info text-start border-2" style={{ backgroundColor: '#f0f9ff', borderColor: '#bae6fd' }}>
+                                        <div className="fw-bold text-primary mb-1">Self-Guided Option Available</div>
+                                        <small className="text-secondary">While all our expert guides are currently booked for this date, you can still enjoy this package at your own pace with our <strong>Self-Guided</strong> option.</small>
                                     </div>
-                                ))}
+                                )}
                             </div>
                             <div className="d-grid gap-2">
                                 <Button

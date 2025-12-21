@@ -223,16 +223,29 @@ const BookingManagement = () => {
                                                         variant="outline-success"
                                                         size="sm"
                                                         className="me-2"
-                                                        onClick={() => handleStatusUpdate(booking.bookingId, 'confirmed')}
+                                                        title="Confirm Booking"
+                                                        onClick={() => handleStatusUpdate(booking.id || booking.bookingId, 'confirmed')}
                                                     >
                                                         <FaCheckCircle />
                                                     </Button>
                                                 )}
-                                                {booking.status !== 'cancelled' && (
+                                                {booking.status === 'confirmed' && (
+                                                    <Button
+                                                        variant="outline-info"
+                                                        size="sm"
+                                                        className="me-2"
+                                                        title="Mark as Completed"
+                                                        onClick={() => handleStatusUpdate(booking.id || booking.bookingId, 'completed')}
+                                                    >
+                                                        <FaCheckCircle />
+                                                    </Button>
+                                                )}
+                                                {booking.status !== 'cancelled' && booking.status !== 'completed' && (
                                                     <Button
                                                         variant="outline-danger"
                                                         size="sm"
-                                                        onClick={() => handleStatusUpdate(booking.bookingId, 'cancelled')}
+                                                        title="Cancel Booking"
+                                                        onClick={() => handleStatusUpdate(booking.id || booking.bookingId, 'cancelled')}
                                                     >
                                                         <FaTimes />
                                                     </Button>

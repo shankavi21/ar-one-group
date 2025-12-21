@@ -41,7 +41,7 @@ const HomePage = () => {
                 ]);
 
                 setPackages(packagesData.slice(0, 4)); // Show top 4
-                setGuides(guidesData.slice(0, 6)); // Show top 6
+                setGuides(guidesData); // Show all guides dynamically
                 setReviews(reviewsData.slice(0, 3)); // Show top 3 reviews
 
                 // Filter active offers
@@ -421,20 +421,20 @@ const HomePage = () => {
                             <Col md={4} className="mb-4" key={review.id}>
                                 <Card className="border-0 shadow-sm p-4 h-100 rounded-4">
                                     <div className="d-flex text-warning mb-3">
-                                        {[...Array(review.rating)].map((_, i) => <FaStar key={i} />)}
+                                        {[...Array(Number(review.rating) || 5)].map((_, i) => <FaStar key={i} />)}
                                     </div>
                                     <p className="text-secondary italic mb-4">"{review.comment}"</p>
                                     <div className="d-flex align-items-center mt-auto">
                                         {review.userPhoto ? (
                                             <img src={review.userPhoto} alt={review.name} className="rounded-circle shadow-sm" style={{ width: '40px', height: '40px', objectFit: 'cover' }} />
                                         ) : (
-                                            <div className="bg-secondary rounded-circle d-flex align-items-center justify-content-center text-white" style={{ width: '40px', height: '40px' }}>
-                                                {review.name.charAt(0)}
+                                            <div className="bg-secondary rounded-circle d-flex align-items-center justify-content-center text-white fw-bold" style={{ width: '40px', height: '40px' }}>
+                                                {(review.name || review.userName || 'A').charAt(0).toUpperCase()}
                                             </div>
                                         )}
                                         <div className="ms-3">
-                                            <h6 className="fw-bold mb-0 small">{review.name}</h6>
-                                            <p className="text-muted small mb-0">From {review.country}</p>
+                                            <h6 className="fw-bold mb-0 small">{review.name || review.userName || 'Anonymous'}</h6>
+                                            <p className="text-muted small mb-0">From {review.country || 'Global Traveler'}</p>
                                         </div>
                                     </div>
                                 </Card>

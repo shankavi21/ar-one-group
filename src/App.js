@@ -30,7 +30,21 @@ import ContactManagement from './admin/pages/ContactManagement';
 import ReviewManagement from './admin/pages/ReviewManagement';
 import OfferManagement from './admin/pages/OfferManagement';
 import AdminSettings from './admin/pages/AdminSettings';
+import PayoutManagement from './admin/pages/PayoutManagement';
 import Analytics from './admin/pages/Analytics';
+import DataDebugger from './pages/DataDebugger';
+
+// Guide imports
+import GuideProtectedRoute from './components/GuideProtectedRoute';
+import GuideLayout from './guide/components/GuideLayout';
+import GuideDashboard from './guide/pages/GuideDashboard';
+import GuideBookings from './guide/pages/GuideBookings';
+import GuideCalendar from './guide/pages/GuideCalendar';
+import GuideProfile from './guide/pages/GuideProfile';
+import GuideEarnings from './guide/pages/GuideEarnings';
+import GuideReviews from './guide/pages/GuideReviews';
+import GuideSigninPage from './guide/pages/GuideSigninPage';
+
 
 function App() {
   return (
@@ -41,6 +55,7 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<SigninPage />} />
           <Route path="/register" element={<SignupPage />} />
+          <Route path="/inspect-db" element={<DataDebugger />} />
 
           {/* User Routes */}
           <Route path="/home" element={<HomePage />} />
@@ -72,9 +87,29 @@ function App() {
             <Route path="contacts" element={<ContactManagement />} />
             <Route path="reviews" element={<ReviewManagement />} />
             <Route path="offers" element={<OfferManagement />} />
+            <Route path="payouts" element={<PayoutManagement />} />
             <Route path="settings" element={<AdminSettings />} />
             <Route path="analytics" element={<Analytics />} />
           </Route>
+
+          {/* Guide Routes - Protected */}
+          <Route path="/guide/login" element={<GuideSigninPage />} />
+          <Route
+            path="/guide"
+            element={
+              <GuideProtectedRoute>
+                <GuideLayout />
+              </GuideProtectedRoute>
+            }
+          >
+            <Route index element={<GuideDashboard />} />
+            <Route path="bookings" element={<GuideBookings />} />
+            <Route path="calendar" element={<GuideCalendar />} />
+            <Route path="profile" element={<GuideProfile />} />
+            <Route path="earnings" element={<GuideEarnings />} />
+            <Route path="reviews" element={<GuideReviews />} />
+          </Route>
+
         </Routes>
       </Router>
     </AppProvider>

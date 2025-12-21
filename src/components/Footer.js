@@ -33,11 +33,15 @@ const Footer = () => {
                     </Col>
                     <Col md={3} className="mb-4">
                         <h6 className="fw-bold mb-3">Follow Us</h6>
-                        <div className="d-flex gap-3">
+                        <div className="d-flex gap-3 mb-3">
                             <FaFacebook className="text-secondary fs-5 cursor-pointer" />
                             <FaTwitter className="text-secondary fs-5 cursor-pointer" />
                             <FaInstagram className="text-secondary fs-5 cursor-pointer" />
                             <FaLinkedin className="text-secondary fs-5 cursor-pointer" />
+                        </div>
+                        <h6 className="fw-bold mb-2 small text-uppercase" style={{ fontSize: '10px', letterSpacing: '1px' }}>Portal Links</h6>
+                        <div className="d-flex gap-2">
+                            <a href="/admin/login" className="text-decoration-none text-secondary x-small">Admin Login</a>
                         </div>
                     </Col>
                 </Row>

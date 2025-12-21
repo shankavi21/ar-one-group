@@ -10,8 +10,10 @@ import {
     where,
     orderBy,
     serverTimestamp,
-    getDoc
+    getDoc,
+    onSnapshot
 } from 'firebase/firestore';
+
 
 // --- USERS ---
 
@@ -163,6 +165,33 @@ export const deleteGuide = async (id) => {
     }
 };
 
+export const getGuide = async (id) => {
+    try {
+        const docRef = doc(db, "guides", id);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            return { id: docSnap.id, ...docSnap.data() };
+        } else {
+            return null;
+        }
+    } catch (error) {
+        console.error("Error getting guide:", error);
+        throw error;
+    }
+};
+
+export const getGuideByUid = async (uid) => {
+    try {
+        const q = query(collection(db, "guides"), where("uid", "==", uid));
+        const querySnapshot = await getDocs(q);
+        if (querySnapshot.empty) return null;
+        return { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() };
+    } catch (error) {
+        console.error("Error getting guide by uid:", error);
+        throw error;
+    }
+};
+
 export const getPackage = async (id) => {
     try {
         const docRef = doc(db, "packages", id);
@@ -213,6 +242,21 @@ export const getUserBookings = async (userId) => {
     }
 };
 
+export const getGuideBookings = async (guideId) => {
+    try {
+        // Fetch by guideId only to avoid index requirement for multiple fields/ordering
+        const q = query(collection(db, "bookings"), where("guide.id", "==", guideId));
+        const querySnapshot = await getDocs(q);
+        const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // Sort in memory
+        return data.sort((a, b) => new Date(b.travelDate) - new Date(a.travelDate));
+    } catch (error) {
+        console.error("Error getting guide bookings:", error);
+        throw error;
+    }
+};
+
 export const createBooking = async (bookingData) => {
     try {
         // Use provided bookingId or generate one
@@ -226,6 +270,18 @@ export const createBooking = async (bookingData) => {
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
         });
+
+        // Create notification for guide if assigned
+        if (bookingData.guide?.id && bookingData.guide.id !== 'no-guide') {
+            await createNotification({
+                guideId: bookingData.guide.id,
+                title: 'New Booking Assigned!',
+                message: `You have a new booking for ${bookingData.packageTitle} on ${bookingData.travelDate}.`,
+                type: 'new_booking',
+                bookingId: docRef.id
+            });
+        }
+
         return docRef.id;
     } catch (error) {
         console.error("Error creating booking:", error);
@@ -368,6 +424,23 @@ export const deleteReview = async (id) => {
     }
 };
 
+export const getGuideReviews = async (guideId, onlyApproved = true) => {
+    try {
+        // Sort/Filter in memory to avoid composite index requirement
+        const q = query(collection(db, "reviews"), where("guideId", "==", guideId));
+        const querySnapshot = await getDocs(q);
+        const allReviews = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        if (onlyApproved) {
+            return allReviews.filter(review => review.status === "approved");
+        }
+        return allReviews;
+    } catch (error) {
+        console.error("Error getting guide reviews:", error);
+        throw error;
+    }
+};
+
 // --- OFFERS ---
 
 export const getAllOffers = async () => {
@@ -443,6 +516,155 @@ export const verifyOfferCode = async (code) => {
         return { valid: true, offer };
     } catch (error) {
         console.error("Error verifying offer:", error);
+        throw error;
+    }
+};
+
+// --- GUIDE AVAILABILITY & BLOCKED DATES ---
+
+export const getBlockedDates = async (guideId) => {
+    try {
+        const q = query(collection(db, "blocked_dates"), where("guideId", "==", guideId));
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (error) {
+        console.error("Error getting blocked dates:", error);
+        throw error;
+    }
+};
+
+export const getBlockedDatesByDate = async (date) => {
+    try {
+        const q = query(collection(db, "blocked_dates"), where("date", "==", date));
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (error) {
+        console.error("Error getting blocked dates by date:", error);
+        throw error;
+    }
+};
+
+export const addBlockedDate = async (blockedData) => {
+    try {
+        const docRef = await addDoc(collection(db, "blocked_dates"), {
+            ...blockedData,
+            createdAt: serverTimestamp()
+        });
+        return docRef.id;
+    } catch (error) {
+        console.error("Error adding blocked date:", error);
+        throw error;
+    }
+};
+
+export const deleteBlockedDate = async (id) => {
+    try {
+        await deleteDoc(doc(db, "blocked_dates", id));
+    } catch (error) {
+        console.error("Error deleting blocked date:", error);
+        throw error;
+    }
+};
+
+// --- NOTIFICATIONS ---
+
+export const getGuideNotifications = (guideId, callback) => {
+    const q = query(
+        collection(db, "notifications"),
+        where("guideId", "==", guideId)
+    );
+
+    return onSnapshot(q, (snapshot) => {
+        const notifications = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+
+        // Sort by date in memory
+        const sorted = notifications.sort((a, b) => {
+            const dateA = a.createdAt?.seconds || 0;
+            const dateB = b.createdAt?.seconds || 0;
+            return dateB - dateA;
+        });
+
+        callback(sorted);
+    });
+};
+
+export const markNotificationAsRead = async (notificationId) => {
+    try {
+        const docRef = doc(db, "notifications", notificationId);
+        await updateDoc(docRef, { read: true });
+    } catch (error) {
+        console.error("Error marking notification as read:", error);
+    }
+};
+
+export const createNotification = async (notificationData) => {
+    try {
+        await addDoc(collection(db, "notifications"), {
+            ...notificationData,
+            read: false,
+            createdAt: serverTimestamp()
+        });
+    } catch (error) {
+        console.error("Error creating notification:", error);
+    }
+};
+
+// --- PAYOUTS ---
+
+export const recordGuidePayout = async (payoutData) => {
+    try {
+        const docRef = await addDoc(collection(db, "payouts"), {
+            ...payoutData,
+            createdAt: serverTimestamp()
+        });
+
+        // Update the booking to mark as payout_recorded if applicable
+        if (payoutData.bookingId) {
+            // We need to find the document ID for the booking. 
+            // In our system, bookingId might be the human-readable ID.
+            // But let's assume for now we just want the record.
+        }
+
+        return docRef.id;
+    } catch (error) {
+        console.error("Error recording payout:", error);
+        throw error;
+    }
+};
+
+export const getGuidePayouts = async (guideId) => {
+    try {
+        const q = query(
+            collection(db, "payouts"),
+            where("guideId", "==", guideId)
+        );
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })).sort((a, b) => {
+            const dateA = a.payoutDate || a.createdAt?.seconds || 0;
+            const dateB = b.payoutDate || b.createdAt?.seconds || 0;
+            return new Date(dateB) - new Date(dateA);
+        });
+    } catch (error) {
+        console.error("Error getting payouts:", error);
+        throw error;
+    }
+};
+
+export const getAllPayouts = async () => {
+    try {
+        const querySnapshot = await getDocs(collection(db, "payouts"));
+        return querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })).sort((a, b) => new Date(b.createdAt?.seconds * 1000) - new Date(a.createdAt?.seconds * 1000));
+    } catch (error) {
+        console.error("Error getting all payouts:", error);
         throw error;
     }
 };

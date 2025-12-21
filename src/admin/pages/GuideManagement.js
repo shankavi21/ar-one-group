@@ -3,6 +3,7 @@ import { Card, Table, Button, Form, Modal, Badge, InputGroup, Row, Col, Image } 
 import { FaSearch, FaEdit, FaTrash, FaPlus, FaCheck, FaTimes, FaStar } from 'react-icons/fa';
 
 import { getAllGuides, addGuide, updateGuide, deleteGuide } from '../../services/firestoreService';
+import { createGuideAccount } from '../../utils/guideAuth';
 
 const GuideManagement = () => {
     const [guides, setGuides] = useState([]);
@@ -10,6 +11,10 @@ const GuideManagement = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [editingGuide, setEditingGuide] = useState(null);
+    const [showAccountModal, setShowAccountModal] = useState(false);
+    const [accountData, setAccountData] = useState({ email: '', password: '' });
+    const [selectedGuideForAccount, setSelectedGuideForAccount] = useState(null);
+
     const [formData, setFormData] = useState({
         name: '',
         role: '',
@@ -114,6 +119,34 @@ const GuideManagement = () => {
         } catch (error) {
             console.error("Error updating status", error);
             alert("Failed to update status");
+        }
+    };
+
+    const handleOpenAccountModal = (guide) => {
+        setSelectedGuideForAccount(guide);
+        setAccountData({ email: guide.email || '', password: '' });
+        setShowAccountModal(true);
+    };
+
+    const handleCreateAccount = async () => {
+        if (!accountData.email || !accountData.password) {
+            alert("Please provide both email and password");
+            return;
+        }
+
+        try {
+            const user = await createGuideAccount(accountData.email, accountData.password);
+            await updateGuide(selectedGuideForAccount.id, {
+                uid: user.uid,
+                email: accountData.email,
+                hasAccount: true
+            });
+            alert("Account created successfully!");
+            setShowAccountModal(false);
+            loadGuides();
+        } catch (error) {
+            console.error("Error creating account:", error);
+            alert("Failed to create account: " + error.message);
         }
     };
 
@@ -235,6 +268,7 @@ const GuideManagement = () => {
                                     <th>Experience</th>
                                     <th>Rating</th>
                                     <th>Status</th>
+                                    <th>Account</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -255,6 +289,19 @@ const GuideManagement = () => {
                                         <td>{guide.experience}</td>
                                         <td><FaStar className="text-warning" /> {guide.rating}</td>
                                         <td>{getStatusBadge(guide.status)}</td>
+                                        <td>
+                                            {guide.hasAccount ? (
+                                                <Badge bg="success">Active</Badge>
+                                            ) : (
+                                                <Button
+                                                    variant="outline-warning"
+                                                    size="sm"
+                                                    onClick={() => handleOpenAccountModal(guide)}
+                                                >
+                                                    Create Account
+                                                </Button>
+                                            )}
+                                        </td>
                                         <td>
                                             {guide.status === 'pending' && (
                                                 <>
@@ -425,6 +472,44 @@ const GuideManagement = () => {
                     </Button>
                     <Button variant="primary" onClick={handleSave}>
                         Save Guide
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+
+            {/* Create Account Modal */}
+            <Modal show={showAccountModal} onHide={() => setShowAccountModal(false)}>
+                <Modal.Header closeButton>
+                    <Modal.Title>Create Guide Login Account</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <p>Create a dedicated login account for <strong>{selectedGuideForAccount?.name}</strong>. They will use these credentials to access their dashboard.</p>
+                    <Form>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Email Address</Form.Label>
+                            <Form.Control
+                                type="email"
+                                value={accountData.email}
+                                onChange={(e) => setAccountData({ ...accountData, email: e.target.value })}
+                                placeholder="guide@example.com"
+                            />
+                        </Form.Group>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Password</Form.Label>
+                            <Form.Control
+                                type="password"
+                                value={accountData.password}
+                                onChange={(e) => setAccountData({ ...accountData, password: e.target.value })}
+                                placeholder="Enter password (min 6 chars)"
+                            />
+                        </Form.Group>
+                    </Form>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={() => setShowAccountModal(false)}>
+                        Cancel
+                    </Button>
+                    <Button variant="warning" onClick={handleCreateAccount}>
+                        Create Account
                     </Button>
                 </Modal.Footer>
             </Modal>
